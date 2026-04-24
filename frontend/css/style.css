@@ -1,0 +1,28 @@
+/* HydroRisk — placeholder styles */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: sans-serif; background: #f4f6f9; color: #1a1a2e; }
+header { background: #1a1a2e; color: #fff; padding: 1.5rem 2rem; }
+header h1 { font-size: 2rem; }
+.tagline { opacity: 0.7; margin-top: 0.25rem; }
+main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+.input-panel, .results-panel { background: #fff; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+h2, h3 { margin-bottom: 1rem; }
+form label { display: block; margin-bottom: 0.75rem; font-size: 0.9rem; }
+form input { display: block; width: 100%; margin-top: 0.2rem; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+button { margin-top: 1rem; padding: 0.75rem 2rem; background: #0047ab; color: #fff; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
+button:hover { background: #003080; }
+.verdict-banner { font-size: 1.5rem; font-weight: bold; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; text-align: center; }
+.verdict-banner.critical { background: #fde8e8; color: #c0392b; }
+.verdict-banner.major    { background: #fdf3cd; color: #856404; }
+.verdict-banner.correct  { background: #d4edda; color: #155724; }
+.metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+.metric { background: #f4f6f9; border-radius: 6px; padding: 1rem; }
+.metric .label { display: block; font-size: 0.8rem; opacity: 0.7; margin-bottom: 0.25rem; }
+.metric .value { font-size: 1.4rem; font-weight: bold; }
+.breakdown h3 { margin-bottom: 0.75rem; }
+.bar-row { display: flex; align-items: center; margin-bottom: 0.5rem; gap: 0.75rem; }
+.bar-label { width: 120px; font-size: 0.85rem; }
+.bar-track { flex: 1; background: #e9ecef; border-radius: 4px; height: 18px; }
+.bar-fill  { height: 100%; background: #0047ab; border-radius: 4px; transition: width 0.4s; }
+.bar-pct   { width: 48px; font-size: 0.85rem; text-align: right; }
+.error-panel { background: #fde8e8; border-radius: 8px; padding: 1rem; color: #c0392b; }

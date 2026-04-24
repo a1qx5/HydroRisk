@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HydroRisk — Flood Risk Intelligence</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header>
+    <h1>HydroRisk</h1>
+    <p class="tagline">Satellite-powered flood risk pricing for insurers</p>
+  </header>
+
+  <main>
+    <section class="input-panel">
+      <h2>Property Analysis</h2>
+      <form id="analyze-form">
+        <label>Latitude  <input type="number" id="lat" step="any" placeholder="46.5670" /></label>
+        <label>Longitude <input type="number" id="lon" step="any" placeholder="26.9146" /></label>
+        <label>Property Value (€) <input type="number" id="property_value" placeholder="250000" /></label>
+        <label>Current Premium (€/yr) <input type="number" id="current_premium" placeholder="800" /></label>
+        <button type="submit">Analyze Risk</button>
+      </form>
+    </section>
+
+    <section class="results-panel" id="results" hidden>
+      <div class="verdict-banner" id="verdict-banner"></div>
+
+      <div class="metrics-grid">
+        <div class="metric">
+          <span class="label">Flood Probability</span>
+          <span class="value" id="flood-prob"></span>
+        </div>
+        <div class="metric">
+          <span class="label">Risk Rating</span>
+          <span class="value" id="risk-rating"></span>
+        </div>
+        <div class="metric">
+          <span class="label">Expected Annual Loss</span>
+          <span class="value" id="eal"></span>
+        </div>
+        <div class="metric">
+          <span class="label">Recommended Premium</span>
+          <span class="value" id="rec-premium"></span>
+        </div>
+      </div>
+
+      <div class="breakdown">
+        <h3>Risk Drivers</h3>
+        <div id="risk-bars"></div>
+      </div>
+    </section>
+
+    <section class="error-panel" id="error-panel" hidden>
+      <p id="error-message"></p>
+    </section>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
