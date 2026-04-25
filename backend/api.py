@@ -16,6 +16,7 @@ from flask_cors import CORS
 from layer2.risk_engine import calculate_probability
 from layer3.premium_calculator import calculate_premium
 from layer3.portfolio_model    import calculate_portfolio_impact
+from layer3.accumulation_model import calculate_accumulation_risk
 
 app = Flask(__name__)
 CORS(app)
@@ -149,6 +150,29 @@ def portfolio():
             mispriced_pct   = float(body.get("mispriced_pct",        0.20)),
             avg_mispricing  = float(body.get("avg_mispricing",       400)),
         )
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/accumulation", methods=["POST"])
+def accumulation_endpoint():
+    """
+    Accepts a list of policies and returns geographic accumulation risk clusters.
+
+    Body: { "policies": [ { lat, lon, property_value,
+                             annual_flood_probability, risk_rating,
+                             damage_fraction (optional, default 0.44) }, ... ] }
+
+    Returns: { clusters, critical_zones, high_zones,
+                portfolio_summary, reinsurance_advice }
+    """
+    try:
+        body     = request.get_json(force=True, silent=True) or {}
+        policies = body.get("policies", [])
+        if not policies:
+            return jsonify({"error": "policies list is required and must not be empty"}), 400
+        result = calculate_accumulation_risk(policies)
         return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
