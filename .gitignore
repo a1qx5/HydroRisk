@@ -12,3 +12,7 @@ __pycache__/
 *~
 .DS_Store
 PERSON1.md
+/CLAUDE.md
+/claude.md
+/requirements.txt
+/test_backend.py

@@ -1,17 +1,20 @@
 """
-Person 4 — Layer 3: Premium Calculator
+Layer 3: Premium Calculator
 Input:  probability_data dict (from calculate_probability),
-        property_value (float, €, optional),
-        current_premium (float, €, optional)
+        property_value (float, €) — must be provided; falls back to Romanian average if missing,
+        current_premium (float, €, optional),
+        loss_ratio (float, optional) — insurer-specific target; defaults to 0.65
 Output: full premium recommendation dict (see CLAUDE.md Layer 3 → Frontend contract)
 
 Depth-damage curve: JRC European Flood Damage Functions for residential buildings.
-Loss ratio target: 0.65 (standard flood insurance economics).
+  Source: Huizinga et al. (2017), Joint Research Centre, EU.
+Loss ratio: fraction of premium that goes to paying claims (rest = admin + profit).
+  0.65 is the EU non-life flood insurance benchmark; individual insurers vary 0.60–0.75.
 """
 from datetime import datetime, timezone
 
 # JRC European Flood Damage Functions — residential buildings
-# Source: Joint Research Centre, EU (Huizinga et al. 2017)
+# (depth_metres, damage_fraction_of_property_value)
 _JRC_CURVE = [
     (0.10, 0.04),
     (0.30, 0.13),
@@ -23,35 +26,12 @@ _JRC_CURVE = [
     (3.00, 0.83),
 ]
 
-_LOSS_RATIO = 0.65           # 65% of premium goes to claims; 35% = admin + profit
-_DEFAULT_PROPERTY_VALUE = 150_000  # € — Romanian residential average
-
-# Placeholder hero probability — replace with calculate_probability() at Hour 5
-PLACEHOLDER_HERO_PROB = {
-    "annual_flood_probability": 0.608,
-    "flood_probability_pct":    60.8,
-    "risk_rating":              "VERY HIGH",
-    "expected_flood_depth_m":   1.1,
-    "component_scores": {
-        "flood_history_score": 0.60,
-        "terrain_score":       0.95,
-        "landuse_score":       0.82,
-        "climate_score":       0.50,
-        "defense_score":       0.50,
-    },
-    "weighted_contributions": {
-        "Flood History": 34.4,
-        "Terrain":       38.7,
-        "Land Use":      16.7,
-        "Climate":        8.1,
-        "Defenses":       2.0,
-    },
-    "confidence": "HIGH",
-}
+_DEFAULT_LOSS_RATIO     = 0.65       # EU flood insurance benchmark
+_DEFAULT_PROPERTY_VALUE = 150_000    # € — Romanian residential average (fallback only)
 
 
 def _depth_damage_fraction(depth_m: float) -> float:
-    """Interpolate JRC damage fraction for a given flood depth (metres)."""
+    """Linear interpolation of JRC damage fraction for a given flood depth."""
     if depth_m <= 0 or depth_m < _JRC_CURVE[0][0]:
         return 0.0
     if depth_m >= _JRC_CURVE[-1][0]:
@@ -65,23 +45,66 @@ def _depth_damage_fraction(depth_m: float) -> float:
     return 0.97
 
 
+def _top_driver(weighted_contributions: dict) -> tuple[str, float]:
+    """Return the name and percentage of the largest risk contributor."""
+    driver = max(weighted_contributions, key=weighted_contributions.get)
+    return driver, weighted_contributions[driver]
+
+
+def _generate_explanation(
+    probability_data: dict,
+    eal: float,
+    recommended_premium: float,
+    current_premium: float | None,
+) -> str:
+    prob_pct = probability_data["flood_probability_pct"]
+    rating   = probability_data["risk_rating"]
+    driver, driver_pct = _top_driver(probability_data["weighted_contributions"])
+
+    lines = [
+        f"This property carries a {prob_pct:.1f}% annual flood probability ({rating} risk).",
+        f"The primary risk driver is {driver}, accounting for {driver_pct:.1f}% of the total risk score.",
+        f"Expected annual loss: €{eal:,.0f}.",
+    ]
+
+    if current_premium and current_premium > 0 and eal > 0:
+        coverage_pct = current_premium / eal * 100
+        gap          = recommended_premium - current_premium
+        if gap > 0:
+            lines.append(
+                f"The current premium of €{current_premium:,.0f} covers only "
+                f"{coverage_pct:.1f}% of expected annual losses — "
+                f"the policy is underpriced by €{gap:,.0f}."
+            )
+        else:
+            lines.append(
+                f"The recommended premium of €{recommended_premium:,.0f} is below "
+                f"the current premium of €{current_premium:,.0f}."
+            )
+
+    return " ".join(lines)
+
+
 def calculate_premium(
     probability_data: dict,
     property_value: float = None,
     current_premium: float = None,
+    loss_ratio: float = None,
 ) -> dict:
     """Calculate recommended flood insurance premium and pricing gap vs current premium."""
-    prop_value = property_value if property_value is not None else _DEFAULT_PROPERTY_VALUE
+    prop_value        = property_value if property_value is not None else _DEFAULT_PROPERTY_VALUE
     prop_value_source = "PROVIDED" if property_value is not None else "DEFAULT_ESTIMATE"
+    target_loss_ratio = loss_ratio if loss_ratio is not None else _DEFAULT_LOSS_RATIO
 
     prob  = probability_data["annual_flood_probability"]
     depth = probability_data["expected_flood_depth_m"]
 
-    damage_fraction          = _depth_damage_fraction(depth)
+    damage_fraction           = _depth_damage_fraction(depth)
     expected_damage_per_event = prop_value * damage_fraction
-    expected_annual_loss     = prob * expected_damage_per_event
-    recommended_premium      = expected_annual_loss / _LOSS_RATIO
+    expected_annual_loss      = prob * expected_damage_per_event
+    recommended_premium       = expected_annual_loss / target_loss_ratio
 
+    # ── Pricing gap ────────────────────────────────────────────────────────────
     if current_premium is not None:
         gap_euros   = recommended_premium - current_premium
         gap_pct     = (gap_euros / current_premium * 100) if current_premium > 0 else 0.0
@@ -94,14 +117,14 @@ def calculate_premium(
         else:
             verdict = "OVERPRICED"
 
-        if abs_gap_pct < 20:
-            severity = "MINOR"
-        elif abs_gap_pct < 50:
-            severity = "SIGNIFICANT"
-        elif abs_gap_pct < 100:
-            severity = "MAJOR"
-        else:
-            severity = "CRITICAL"
+        severity = (
+            "MINOR"       if abs_gap_pct < 20  else
+            "SIGNIFICANT" if abs_gap_pct < 50  else
+            "MAJOR"       if abs_gap_pct < 100 else
+            "CRITICAL"
+        )
+
+        coverage_pct = (current_premium / expected_annual_loss * 100) if expected_annual_loss > 0 else 0.0
 
         pricing_gap = {
             "current_premium":     round(current_premium, 2),
@@ -110,6 +133,7 @@ def calculate_premium(
             "gap_pct":             round(gap_pct, 2),
             "verdict":             verdict,
             "severity":            severity,
+            "coverage_pct":        round(coverage_pct, 2),
         }
     else:
         pricing_gap = {
@@ -119,7 +143,11 @@ def calculate_premium(
             "gap_pct":             None,
             "verdict":             None,
             "severity":            None,
+            "coverage_pct":        None,
         }
+
+    # ── Top driver (for prominent frontend display) ────────────────────────────
+    driver_name, driver_pct = _top_driver(probability_data["weighted_contributions"])
 
     result = {
         "flood_probability_pct":      probability_data["flood_probability_pct"],
@@ -128,14 +156,21 @@ def calculate_premium(
         "expected_annual_loss":       round(expected_annual_loss, 2),
         "expected_damage_per_event":  round(expected_damage_per_event, 2),
         "damage_fraction_pct":        round(damage_fraction * 100, 2),
+        "property_value_used":        round(prop_value, 2),
+        "property_value_source":      prop_value_source,
+        "loss_ratio_used":            target_loss_ratio,
         "pricing_gap":                pricing_gap,
         "risk_breakdown":             probability_data["weighted_contributions"],
-        "raw_property_data":          {},   # filled in by api.py
+        "top_risk_driver":            {"name": driver_name, "pct": round(driver_pct, 1)},
+        "explanation":                _generate_explanation(
+                                          probability_data,
+                                          expected_annual_loss,
+                                          recommended_premium,
+                                          current_premium,
+                                      ),
         "raw_probability_data":       probability_data,
         "confidence":                 probability_data["confidence"],
-        "data_freshness_days":        1,
         "analysis_timestamp":         datetime.now(timezone.utc).isoformat(),
-        "property_value_source":      prop_value_source,
     }
 
     if prob < 0.02:

@@ -9,21 +9,21 @@ Output: {
 
 
 def get_climate_data(lat: float, lon: float) -> dict:
-    """Return climate multiplier from published RCP 4.5 regional averages for Romania."""
-    # Eastern Romania  (lon > 27)   — largest projected increase in extreme rainfall
-    if lon > 27:
+    """Return climate multiplier from published RCP 4.5 regional averages dynamically via coordinates."""
+    if lat < 45: # Southern Europe (Spain, Italy, Greece)
+        multiplier = 1.30 
+        trend = "INCREASING_RAPIDLY"
+    elif lat >= 55: # Northern Europe (Scandinavia)
+        multiplier = 1.05
+        trend = "STABLE"
+    elif lon > 20: # Eastern Europe (Poland, Romania, Baltics)
         multiplier = 1.25
-    # Southern Romania (lat < 45)   — Danube plain, significant summer flooding increase
-    elif lat < 45:
-        multiplier = 1.20
-    # Central Romania  (lat ≥ 45, 23 ≤ lon ≤ 27) — Transylvania, moderate increase
-    elif 23 <= lon <= 27:
-        multiplier = 1.18
-    # Western Romania  (lon < 23)   — Atlantic patterns moderate the impact
-    else:
+        trend = "INCREASING"
+    else: # Western/Central Europe (France, Germany)
         multiplier = 1.15
-
+        trend = "INCREASING"
+        
     return {
         "climate_multiplier_2035": multiplier,
-        "precipitation_trend": "INCREASING",
+        "precipitation_trend": trend,
     }
