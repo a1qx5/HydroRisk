@@ -15,6 +15,7 @@ from flask_cors import CORS
 
 from layer2.risk_engine import calculate_probability
 from layer3.premium_calculator import calculate_premium
+from layer3.portfolio_model    import calculate_portfolio_impact
 
 app = Flask(__name__)
 CORS(app)
@@ -118,6 +119,36 @@ def analyze():
         probability_data = calculate_probability(property_data)
         result           = calculate_premium(probability_data, property_value, current_premium, loss_ratio)
         result["raw_property_data"] = property_data
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/portfolio", methods=["POST"])
+def portfolio():
+    """
+    Optional portfolio impact endpoint.
+    The frontend calculates the same numbers client-side in JS —
+    this endpoint exists for completeness and demo logging.
+
+    Body (all optional, defaults match the demo scenario):
+      portfolio_size   int    100000
+      avg_premium      float  1200
+      loss_ratio       float  0.85
+      expense_ratio    float  0.28
+      mispriced_pct    float  0.20
+      avg_mispricing   float  400
+    """
+    body = request.get_json(force=True, silent=True) or {}
+    try:
+        result = calculate_portfolio_impact(
+            portfolio_size  = int(float(body.get("portfolio_size",  100_000))),
+            avg_premium     = float(body.get("avg_premium",          1_200)),
+            loss_ratio      = float(body.get("loss_ratio",           0.85)),
+            expense_ratio   = float(body.get("expense_ratio",        0.28)),
+            mispriced_pct   = float(body.get("mispriced_pct",        0.20)),
+            avg_mispricing  = float(body.get("avg_mispricing",       400)),
+        )
         return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
