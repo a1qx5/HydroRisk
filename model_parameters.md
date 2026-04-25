@@ -156,7 +156,7 @@ if flood_history_confidence == "LOW":
     return max(prob, 0.05)
 ```
 
-If Person 1's Sentinel-1 analysis found zero flood events, the confidence is flagged LOW and `annual_flood_probability_observed` is 0.0. Returning 0.0 would mean the history component contributes nothing to the score — but zero events in 10 years is not the same as zero risk. It means the location was either genuinely safe or simply got lucky.
+If Person 1's Sentinel-1 analysis found zero flood events, the confidence is flagged LOW and `annual_flood_probability_observed` is 0.0. Returning 0.0 would mean the history component contributes nothing to the score — but zero events in 12 years is not the same as zero risk. It means the location was either genuinely safe or simply got lucky.
 
 The 0.05 floor represents a **1-in-20-year event probability** as a conservative minimum. This is the standard threshold below which most insurers don't offer standalone flood coverage — meaning it's the lowest plausible actuarially significant risk level.
 

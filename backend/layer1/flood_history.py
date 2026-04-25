@@ -2,7 +2,7 @@
 Person 1 — Lens 1: Flood History (Sentinel-1 SAR)
 Input:  lat (float), lon (float)
 Output: {
-    flood_events_10yr, years_with_flooding,
+    flood_events_12yr, years_with_flooding,
     annual_flood_probability_observed, flood_direct_hits,
     flood_history_confidence
 }
@@ -175,7 +175,7 @@ def get_flood_history(lat: float, lon: float) -> dict:
         confidence = "LOW"
 
     return {
-        "flood_events_10yr": flood_events,
+        "flood_events_12yr": flood_events,
         "years_with_flooding": len(years_flooded),
         "annual_flood_probability_observed": round(probability, 4),
         "flood_direct_hits": direct_hits,

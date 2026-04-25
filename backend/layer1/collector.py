@@ -13,7 +13,7 @@ from .climate import get_climate_data
 from .defenses import get_defense_data
 
 _DEFAULTS = {
-    "flood_events_10yr": 0,
+    "flood_events_12yr": 0,
     "years_with_flooding": 0,
     "annual_flood_probability_observed": 0.05,
     "flood_direct_hits": 0,

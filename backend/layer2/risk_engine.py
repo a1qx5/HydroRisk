@@ -11,7 +11,7 @@ Output: {
 PLACEHOLDER_HERO_DATA = {
     "lat": 46.5670,
     "lon": 26.9146,
-    "flood_events_10yr": 6,
+    "flood_events_12yr": 6,
     "years_with_flooding": 6,
     "annual_flood_probability_observed": 0.60,
     "flood_direct_hits": 4,

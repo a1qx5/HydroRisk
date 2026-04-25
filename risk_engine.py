@@ -30,7 +30,7 @@ Usage at Hour 5 (Phase 5 integration):
 # Location A — Bacău riverside  →  expect VERY HIGH
 PLACEHOLDER_BACAU = {
     # Lens 1 — Flood History (Person 1)
-    "flood_events_10yr":                  7,
+    "flood_events_12yr":                  7,
     "years_with_flooding":                6,
     "annual_flood_probability_observed":  0.60,
     "flood_direct_hits":                  4,
@@ -62,7 +62,7 @@ PLACEHOLDER_BACAU = {
 # Location B — Bucharest suburb  →  expect HIGH or VERY HIGH
 PLACEHOLDER_BUCHAREST = {
     # Lens 1
-    "flood_events_10yr":                  2,
+    "flood_events_12yr":                  2,
     "years_with_flooding":                2,
     "annual_flood_probability_observed":  0.20,
     "flood_direct_hits":                  1,
@@ -93,7 +93,7 @@ PLACEHOLDER_BUCHAREST = {
 # Location C — Predeal mountain  →  expect LOW or MEDIUM
 PLACEHOLDER_PREDEAL = {
     # Lens 1
-    "flood_events_10yr":                  0,
+    "flood_events_12yr":                  0,
     "years_with_flooding":                0,
     "annual_flood_probability_observed":  0.0,
     "flood_direct_hits":                  0,
@@ -124,7 +124,7 @@ PLACEHOLDER_PREDEAL = {
 # Location D — Danube delta (Tulcea)  →  expect VERY HIGH
 PLACEHOLDER_DANUBE = {
     # Lens 1 — very high flood history
-    "flood_events_10yr":                  9,
+    "flood_events_12yr":                  9,
     "years_with_flooding":                8,
     "annual_flood_probability_observed":  0.80,
     "flood_direct_hits":                  7,
@@ -155,7 +155,7 @@ PLACEHOLDER_DANUBE = {
 # Location E — Transylvania valley (Timișoara area)  →  expect MEDIUM or HIGH
 PLACEHOLDER_TRANSYLVANIA = {
     # Lens 1 — occasional flooding
-    "flood_events_10yr":                  2,
+    "flood_events_12yr":                  2,
     "years_with_flooding":                2,
     "annual_flood_probability_observed":  0.20,
     "flood_direct_hits":                  1,
@@ -195,7 +195,7 @@ PLACEHOLDER_HERO = PLACEHOLDER_BACAU
 def flood_history_score(property_data: dict) -> float:
     """
     Use the observed annual flood probability directly — already 0–1.
-    Person 1 derived this from 10 years of Sentinel-1 SAR imagery.
+    Person 1 derived this from 12 years of Sentinel-1 SAR imagery.
 
     Special case: if confidence is LOW (zero satellite events detected),
     return a 0.05 floor. Absence of satellite evidence ≠ proof of zero risk.
@@ -462,7 +462,7 @@ def determine_confidence(property_data: dict) -> str:
 # (better to flag a false positive than miss a genuine risk).
 _NEUTRAL_DEFAULTS = {
     # Lens 1
-    "flood_events_10yr":                  0,
+    "flood_events_12yr":                  0,
     "years_with_flooding":                0,
     "annual_flood_probability_observed":  0.0,
     "flood_direct_hits":                  0,
@@ -574,7 +574,7 @@ def get_risk_explanation(result: dict, property_data: dict) -> str:
         "This property carries a VERY HIGH flood risk, with a 73.8% estimated
         annual probability of flooding. The dominant risk driver is Flood History
         (contributing 38% of the score), based on 7 satellite-detected flood events
-        over the past 10 years. Terrain is the second-largest factor (34%): the
+        over the past 12 years. Terrain is the second-largest factor (34%): the
         property sits just 80 m from the nearest river and lies within a designated
         floodplain. Looking forward, climate projections for this region indicate
         a 25% increase in extreme rainfall intensity by 2035. In a flood event,
@@ -601,8 +601,8 @@ def get_risk_explanation(result: dict, property_data: dict) -> str:
 
     driver_detail = {
         "Flood History": (
-            f"based on {property_data.get('flood_events_10yr', '?')} satellite-detected "
-            f"flood events over the past 10 years"
+            f"based on {property_data.get('flood_events_12yr', '?')} satellite-detected "
+            f"flood events over the past 12 years"
         ),
         "Terrain": (
             f"the property sits {property_data.get('distance_to_river_m', '?'):.0f} m "
