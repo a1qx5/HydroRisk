@@ -14,7 +14,7 @@ import numpy as np
 import requests
 import rasterio
 import rasterio.transform
-from config import OPENTOPOGRAPHY_API_KEY
+from backend.config import OPENTOPOGRAPHY_API_KEY
 
 
 def _fetch_dem(lat: float, lon: float, margin_km: float = 5.0):

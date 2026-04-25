@@ -123,13 +123,13 @@ def _detect_flood(image_array):
 def get_flood_history(lat: float, lon: float) -> dict:
     """Search Sentinel-1 SAR archive (2014–today) for flood events near this property."""
     from sentinelhub import SHConfig
-    from config import SENTINEL_HUB_CLIENT_ID, SENTINEL_HUB_CLIENT_SECRET
+    from backend.config import SENTINEL_HUB_CLIENT_ID, SENTINEL_HUB_CLIENT_SECRET
 
     config = SHConfig()
     config.sh_client_id = os.environ.get("SH_CLIENT_ID", SENTINEL_HUB_CLIENT_ID)
     config.sh_client_secret = os.environ.get("SH_CLIENT_SECRET", SENTINEL_HUB_CLIENT_SECRET)
-    config.download_timeout_seconds = 15
-    config.max_download_attempts = 1
+    config.download_timeout_seconds = 90
+    config.max_download_attempts = 2
     config.sh_base_url = CDSE_BASE_URL
     config.sh_auth_base_url = CDSE_AUTH_URL
     # Required: library defaults to old sentinel-hub.com token endpoint
@@ -161,7 +161,7 @@ def get_flood_history(lat: float, lon: float) -> dict:
             print(f"[WARN] Sentinel-1 query failed {start}–{end}: {e}")
             return year, False, False
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         results = executor.map(check_year, years)
 
     for year, hit, near_miss in results:
