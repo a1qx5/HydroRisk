@@ -6,8 +6,6 @@ Output: {
     is_in_floodplain, elevation_percentile, terrain_flood_score
 }
 """
-
-
 def get_terrain_data(lat: float, lon: float) -> dict:
     """Pull Copernicus 30m DEM procedurally mock for global terrain simulation."""
     loc_hash = hash(f"{lat:.3f}{lon:.3f}") % 1000
