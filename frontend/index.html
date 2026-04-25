@@ -58,6 +58,7 @@
     .sg-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--t2); cursor: pointer; border: 3px solid #111; transition: all .15s; }
     .sg-range:active::-webkit-slider-thumb, .sg-range:hover::-webkit-slider-thumb { background: var(--cyan); border-color: #000; box-shadow: 0 0 10px var(--cyan-glow); }
   </style>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA7sqKfh5JTgUCLA5-S6klPygIwx0T8Tyw"></script>
 </head>
 <body>
   
@@ -74,6 +75,28 @@
       <div class="gl-text" id="gl-stage-text">INITIALIZING...</div>
       <div class="gl-bar-container">
         <div class="gl-bar-fill" id="gl-progress-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sv-modal" class="hidden" style="position: fixed; inset: 0; z-index: 5000; opacity: 0; transition: opacity 0.35s; pointer-events: none;">
+    <div style="width: 100%; height: 100%; display: flex; flex-direction: column; pointer-events: auto;" id="sv-box">
+      <!-- Header bar matching the reference screenshot -->
+      <div style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: var(--panel-bg); border-bottom: 1px solid var(--cyan-bdr); z-index: 10; flex-shrink: 0;">
+        <button onclick="window.closeStreetView()" style="color: var(--t2); font-size: 22px; line-height: 1; transition: color 0.2s;" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--t2)'">&#8592;</button>
+        <div style="font-size: 13px; letter-spacing: 0.15em; color: var(--cyan); font-weight: 700;">STREET VIEW</div>
+        <div id="sv-address" style="font-size: 11px; color: var(--t3); margin-left: 8px;"></div>
+      </div>
+      <!-- Street View renders here -->
+      <div id="sv-pano" style="flex: 1; background: #111;"></div>
+      <div id="sv-loader" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; z-index: 5; pointer-events: none; transition: opacity 0.4s;">
+        <div class="gl-text">ESTABLISHING PANORAMIC LINK...</div>
+      </div>
+      <!-- No imagery fallback -->
+      <div id="sv-no-imagery" style="display: none; position: absolute; inset: 48px 0 0 0; align-items: center; justify-content: center; flex-direction: column; gap: 12px; background: #0a0a0a; z-index: 4;">
+        <div style="font-size: 32px;">&#x1F6AB;</div>
+        <div class="gl-text">NO STREET IMAGERY AT THIS LOCATION</div>
+        <div style="font-size: 11px; color: var(--t3);">Try a nearby street or urban area</div>
       </div>
     </div>
   </div>
@@ -160,7 +183,7 @@
         <button class="layer-btn active" data-layer="dark">DARK</button>
         <button class="layer-btn" data-layer="streets">STREETS</button>
         <button class="layer-btn" data-layer="satellite">SAT</button>
-        <button class="layer-btn" id="sv-toggle" disabled>360°</button>
+        <button class="layer-btn" id="sv-toggle" onclick="window.openStreetView()" disabled>360°</button>
       </div>
     </div>
   </aside>

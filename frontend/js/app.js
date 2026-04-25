@@ -12,6 +12,7 @@ let selectedAddr = null;
 let activeMarker = null;
 let searchTimer  = null;
 let map          = null;
+let svMap        = null;
 let tacticalOverlay = null;
 let analysisOverlays = [];
 let currentAnalysisData = null;
@@ -82,6 +83,7 @@ function selectLocation(lat, lon, addr = null) {
   
   map.setView([lat, lon], Math.max(map.getZoom(), 14), { animate: true });
   document.getElementById('analyze-btn').disabled = false;
+  document.getElementById('sv-toggle').disabled = false;
 }
 
 function makeCrosshair(lat, lng) {
@@ -341,8 +343,8 @@ window.openDashboard = function(section) {
   list.innerHTML = '';
   const raw = d.raw_property_data || {};
   const drivers = [
-    { name: 'TERRAIN ELEVATION', val: raw.elevation_percentile < 15 ? 'CRITICAL' : 'SAFE', pct: raw.elevation_percentile < 15 ? 90 : 20 },
-    { name: 'DISTANCE TO RIVER', val: raw.distance_to_river_m < 200 ? 'HIGH RISK' : 'LOW RISK', pct: raw.distance_to_river_m < 200 ? 85 : 15 },
+    { name: `TERRAIN ELEVATION (${raw.elevation_m}m)`, val: raw.elevation_percentile < 15 ? 'CRITICAL' : 'SAFE', pct: raw.elevation_percentile < 15 ? 90 : 20 },
+    { name: `DISTANCE TO RIVER (${Math.round(raw.distance_to_river_m)}m)`, val: raw.distance_to_river_m < 200 ? 'HIGH RISK' : 'LOW RISK', pct: raw.distance_to_river_m < 200 ? 85 : 15 },
     { name: 'FLOOD HISTORY', val: raw.flood_events_12yr > 1 ? 'SEVERE' : 'NONE', pct: raw.flood_events_12yr > 1 ? 95 : 5 },
     { name: 'SOIL IMPERVIOUSNESS', val: raw.imperviousness_pct > 0.6 ? 'EXTREME' : 'LOW', pct: raw.imperviousness_pct > 0.6 ? 75 : 30 },
     { name: 'CLIMATE MULTIPLIER', val: raw.climate_multiplier_2035 > 1.2 ? 'SEVERE' : 'STABLE', pct: raw.climate_multiplier_2035 > 1.2 ? 80 : 35 },
@@ -450,6 +452,86 @@ function updatePortfolioModel() {
   document.getElementById('out-m-net').textContent = '+' + formatMoneyStr(netBenefit);
   document.getElementById('out-m-roi').textContent = Math.round(roiPct).toLocaleString('en-US') + '%';
 }
+
+let svPanorama = null;
+
+window.openStreetView = function() {
+  if (!selectedLat) return;
+  const modal   = document.getElementById('sv-modal');
+  const loader  = document.getElementById('sv-loader');
+  const noImg   = document.getElementById('sv-no-imagery');
+  const addrEl  = document.getElementById('sv-address');
+
+  // Show modal
+  modal.classList.remove('hidden');
+  loader.style.opacity = '1';
+  loader.style.pointerEvents = 'auto';
+  noImg.style.display = 'none';
+  addrEl.textContent = `${selectedLat.toFixed(5)}, ${selectedLon.toFixed(5)}`;
+
+  void modal.offsetWidth;
+  modal.style.opacity = '1';
+  modal.style.pointerEvents = 'auto';
+
+  const position = { lat: selectedLat, lng: selectedLon };
+  const sv = new google.maps.StreetViewService();
+
+  sv.getPanorama({ location: position, radius: 100, preference: google.maps.StreetViewPreference.NEAREST }, (data, status) => {
+    if (status === google.maps.StreetViewStatus.OK) {
+      // Init panorama once, reuse it after
+      if (!svPanorama) {
+        svPanorama = new google.maps.StreetViewPanorama(
+          document.getElementById('sv-pano'), {
+            pano: data.location.pano,
+            pov: { heading: 0, pitch: 0 },
+            zoom: 1,
+            addressControl: false,
+            fullscreenControl: false,
+            motionTrackingControl: false,
+            showRoadLabels: true,
+            linksControl: true,
+          }
+        );
+      } else {
+        svPanorama.setPano(data.location.pano);
+        svPanorama.setPov({ heading: 0, pitch: 0 });
+      }
+      svPanorama.setVisible(true);
+    } else {
+      // No imagery — try with wider radius
+      sv.getPanorama({ location: position, radius: 500, preference: google.maps.StreetViewPreference.NEAREST }, (data2, status2) => {
+        if (status2 === google.maps.StreetViewStatus.OK) {
+          if (!svPanorama) {
+            svPanorama = new google.maps.StreetViewPanorama(
+              document.getElementById('sv-pano'), {
+                pano: data2.location.pano,
+                pov: { heading: 0, pitch: 0 },
+                zoom: 1,
+                addressControl: false,
+                fullscreenControl: false,
+                motionTrackingControl: false,
+              }
+            );
+          } else {
+            svPanorama.setPano(data2.location.pano);
+          }
+          svPanorama.setVisible(true);
+        } else {
+          noImg.style.display = 'flex';
+        }
+      });
+    }
+    // Hide loader once panorama initialises
+    setTimeout(() => { loader.style.opacity = '0'; loader.style.pointerEvents = 'none'; }, 800);
+  });
+};
+
+window.closeStreetView = function() {
+  const modal = document.getElementById('sv-modal');
+  modal.style.opacity = '0';
+  modal.style.pointerEvents = 'none';
+  setTimeout(() => { modal.classList.add('hidden'); }, 400);
+};
 
 async function runAccumulationScan() {
   const btn = document.getElementById('scan-accumulation-btn');
