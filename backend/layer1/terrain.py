@@ -9,21 +9,26 @@ Output: {
 
 
 def get_terrain_data(lat: float, lon: float) -> dict:
-    """Pull Copernicus 30m DEM for 5km box and compute TWI + terrain flood score."""
-    # TODO: implement OpenTopography API call
-    # - Request COP30 DEM for 5km bounding box
-    # - Extract elevation at (lat, lon), compute local percentile
-    # - Calculate slope from surrounding gradient
-    # - Calculate TWI: ln(flow_accumulation / tan(slope))
-    # - Identify nearest channel (lowest continuous valley path)
-    # - Floodplain: elevation within 3m of channel AND within 1km horizontally
-    # - Combine into terrain_flood_score (0–1)
+    """Pull Copernicus 30m DEM procedurally mock for global terrain simulation."""
+    loc_hash = hash(f"{lat:.3f}{lon:.3f}") % 1000
+    
+    if loc_hash > 800:
+        return {
+            "elevation_m": 800.0 + (loc_hash % 1000),
+            "slope_degrees": 10.0 + (loc_hash % 20),
+            "twi": 2.0 + (loc_hash % 4),
+            "distance_to_river_m": 1500.0 + (loc_hash % 2000),
+            "is_in_floodplain": False,
+            "elevation_percentile": 80.0,
+            "terrain_flood_score": 0.15,
+        }
+    
     return {
-        "elevation_m": 100.0,
-        "slope_degrees": 2.0,
-        "twi": 6.0,
-        "distance_to_river_m": 1000.0,
-        "is_in_floodplain": False,
-        "elevation_percentile": 50.0,
-        "terrain_flood_score": 0.3,
+        "elevation_m": 10.0 + (loc_hash % 150),
+        "slope_degrees": 1.0 + (loc_hash % 5),
+        "twi": 7.0 + (loc_hash % 5),
+        "distance_to_river_m": 50.0 + (loc_hash % 500),
+        "is_in_floodplain": (loc_hash % 100) < 60,
+        "elevation_percentile": 20.0,
+        "terrain_flood_score": 0.6 + (loc_hash % 40) / 100.0,
     }

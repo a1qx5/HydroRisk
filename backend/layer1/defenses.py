@@ -18,18 +18,14 @@ _COORD_TOLERANCE = 0.001  # ~100 m
 
 
 def get_defense_data(lat: float, lon: float) -> dict:
-    """Return flood defense status. Default: NONE. Hero: manually researched."""
-    is_hero = (
-        abs(lat - _HERO_LAT) < _COORD_TOLERANCE
-        and abs(lon - _HERO_LON) < _COORD_TOLERANCE
-    )
-
-    if is_hero:
-        # TODO: update after INHGA research
+    """Return flood defense status procedurally generated based on lat/lon hashing."""
+    has_defense = (hash(f"{lat:.2f}{lon:.2f}") % 100) < (45 if lon < 15 else 25)
+    
+    if has_defense:
         return {
-            "flood_defense_present": False,
-            "defense_protection_level": "NONE",
-            "defense_data_source": "MANUAL_RESEARCH",
+            "flood_defense_present": True,
+            "defense_protection_level": "MEDIUM",
+            "defense_data_source": "PROCEDURAL_MOCK",
         }
 
     return {

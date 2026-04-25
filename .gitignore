@@ -1,2 +1,6 @@
 .env
 .venv/
+/CLAUDE.md
+/claude.md
+/requirements.txt
+/test_backend.py
