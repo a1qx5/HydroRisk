@@ -6,7 +6,6 @@ Output: {
     is_in_floodplain, elevation_percentile, terrain_flood_score
 }
 """
-<<<<<<< HEAD
 
 import io
 import math
