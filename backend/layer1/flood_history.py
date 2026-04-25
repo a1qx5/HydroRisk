@@ -10,6 +10,7 @@ Output: {
 
 import math
 import os
+import socket
 
 import numpy as np
 from sentinelhub import (
@@ -122,8 +123,9 @@ def _detect_flood(image_array):
 
 def get_flood_history(lat: float, lon: float) -> dict:
     """Search Sentinel-1 SAR archive (2014–today) for flood events near this property."""
+    socket.setdefaulttimeout(90)  # Override the 15s socket default; config.download_timeout_seconds alone doesn't reach the read layer
     from sentinelhub import SHConfig
-    from backend.config import SENTINEL_HUB_CLIENT_ID, SENTINEL_HUB_CLIENT_SECRET
+    from config import SENTINEL_HUB_CLIENT_ID, SENTINEL_HUB_CLIENT_SECRET
 
     config = SHConfig()
     config.sh_client_id = os.environ.get("SH_CLIENT_ID", SENTINEL_HUB_CLIENT_ID)
