@@ -5,251 +5,250 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HydroRisk — Flood Risk Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-  <!-- ── Header ────────────────────────────────────────── -->
-  <header class="app-header">
-    <div class="hdr-left">
-      <span class="hdr-mark">◈</span>
-      <span class="hdr-name">HYDRORISK</span>
-      <span class="hdr-sep">|</span>
-      <span class="hdr-sub">Flood Risk Intelligence Platform</span>
+  <!-- Map fills entire screen -->
+  <div id="map"></div>
+
+  <!-- Top strip -->
+  <header class="top-strip">
+    <div class="ts-brand">
+      <svg viewBox="0 0 22 22" fill="none" width="16" height="16" class="ts-icon">
+        <circle cx="11" cy="11" r="3.5" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="11" cy="11" r="8"   stroke="currentColor" stroke-width="1" stroke-dasharray="3.5 2.5" opacity=".5"/>
+        <circle cx="11" cy="11" r="10.5" stroke="currentColor" stroke-width=".8" stroke-dasharray="2 3" opacity=".25"/>
+      </svg>
+      <span class="ts-name">HYDRORISK</span>
+      <span class="ts-divider"></span>
+      <span class="ts-sub">Satellite Flood Intelligence</span>
     </div>
-    <div class="hdr-right">
-      <span class="hdr-live"><span class="live-dot"></span>COPERNICUS LIVE</span>
-      <span class="hdr-meta">EU Space Programme · JRC Damage Curves</span>
+    <div class="ts-right">
+      <span class="ts-live"><span class="live-dot"></span>COPERNICUS ACTIVE</span>
+      <span class="ts-sep"></span>
+      <span class="ts-meta">Sentinel-1 · DEM · C3S · JRC</span>
     </div>
   </header>
 
-  <!-- ── Main layout ───────────────────────────────────── -->
-  <main class="app-main">
+  <!-- Left panel — input -->
+  <aside class="left-panel">
 
-    <!-- Input sidebar -->
-    <aside class="sidebar">
-
-      <div class="sb-section">
-        <div class="sb-label">PROPERTY SEARCH</div>
-        <div class="search-wrap">
-          <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input id="addr-input" type="text" class="sb-input" placeholder="Address or lat, lon…" autocomplete="off" spellcheck="false">
-        </div>
-        <div id="search-dropdown" class="search-dropdown hidden"></div>
-      </div>
-
-      <div class="sb-section">
-        <div class="sb-label">COORDINATES</div>
-        <div class="coord-row">
-          <div class="coord-field">
-            <span class="coord-key">LAT</span>
-            <input id="lat-input" type="number" class="coord-input" placeholder="46.5670" step="0.0001">
-          </div>
-          <div class="coord-divider">·</div>
-          <div class="coord-field">
-            <span class="coord-key">LON</span>
-            <input id="lon-input" type="number" class="coord-input" placeholder="26.9146" step="0.0001">
-          </div>
-        </div>
-      </div>
-
-      <div class="sb-rule"></div>
-
-      <div class="sb-section">
-        <div class="sb-label">PROPERTY VALUE <span class="sb-unit">EUR</span></div>
-        <div class="euro-wrap">
-          <span class="euro-sym">€</span>
-          <input id="prop-val" type="number" class="sb-input euro-inp" placeholder="250,000" min="0" step="5000">
-        </div>
-      </div>
-
-      <div class="sb-section">
-        <div class="sb-label">CURRENT ANNUAL PREMIUM <span class="sb-unit">EUR</span></div>
-        <div class="euro-wrap">
-          <span class="euro-sym">€</span>
-          <input id="curr-prem" type="number" class="sb-input euro-inp" placeholder="1,200" min="0" step="100">
-        </div>
-      </div>
-
-      <button id="analyze-btn" class="analyze-btn" disabled>
-        <span id="analyze-btn-label">SELECT A PROPERTY</span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
-          <line x1="5" y1="12" x2="19" y2="12"/>
-          <polyline points="12,5 19,12 12,19"/>
+    <div class="lp-section">
+      <label class="lp-label">PROPERTY SEARCH</label>
+      <div class="search-wrap">
+        <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-      </button>
+        <input id="addr-input" type="text" class="lp-input" placeholder="Address or lat, lon…" autocomplete="off" spellcheck="false">
+      </div>
+      <div id="search-dropdown" class="search-dropdown hidden"></div>
+    </div>
 
-      <div class="data-tags">
-        <div class="dt-title">DATA SOURCES</div>
-        <div class="dt-row">
-          <span class="dt-tag">Sentinel-1 SAR</span>
-          <span class="dt-tag">Copernicus DEM</span>
-          <span class="dt-tag">C3S Climate</span>
-          <span class="dt-tag">EFAS</span>
-          <span class="dt-tag">JRC Curves</span>
+    <div class="lp-section">
+      <label class="lp-label">COORDINATES</label>
+      <div class="coord-row">
+        <div class="coord-field">
+          <span class="coord-key">LAT</span>
+          <input id="lat-input" type="number" class="coord-input" placeholder="46.5670" step="0.0001">
         </div>
-      </div>
-
-    </aside>
-
-    <!-- Map -->
-    <div class="map-wrap">
-      <div id="map"></div>
-
-      <!-- Layer switcher -->
-      <div class="map-controls">
-        <button class="mc-btn active" id="layer-dark"       data-layer="dark">DARK</button>
-        <button class="mc-btn"        id="layer-streets"    data-layer="streets">STREETS</button>
-        <button class="mc-btn"        id="layer-satellite"  data-layer="satellite">SATELLITE</button>
-        <div class="mc-sep"></div>
-        <button class="mc-btn sv-btn" id="sv-toggle" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 8v4l3 3"/>
-          </svg>
-          STREET VIEW
-        </button>
-      </div>
-
-      <!-- Street view panel -->
-      <div class="sv-panel hidden" id="sv-panel">
-        <div class="sv-bar">
-          <span class="sv-label">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
-              <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
-            </svg>
-            STREET VIEW
-          </span>
-          <span class="sv-coords" id="sv-coords"></span>
-          <button class="sv-close" id="sv-close">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+        <span class="coord-sep">·</span>
+        <div class="coord-field">
+          <span class="coord-key">LON</span>
+          <input id="lon-input" type="number" class="coord-input" placeholder="26.9146" step="0.0001">
         </div>
-        <iframe id="sv-frame" class="sv-frame" src="" allowfullscreen></iframe>
-      </div>
-
-      <div class="map-hint" id="map-hint">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
-          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-          <circle cx="12" cy="10" r="3"/>
-        </svg>
-        Click map to select a property
       </div>
     </div>
 
-    <!-- Results panel -->
-    <aside class="results-panel" id="results-panel">
+    <div class="lp-rule"></div>
 
-      <!-- Empty -->
-      <div id="state-empty" class="rp-state">
-        <div class="empty-mark">◈</div>
-        <div class="empty-title">Awaiting Selection</div>
-        <div class="empty-body">Select a property on the map or search by address to run satellite flood risk analysis and receive premium recommendations.</div>
-        <ul class="empty-list">
-          <li>10-year Sentinel-1 flood history</li>
-          <li>Copernicus DEM terrain analysis</li>
-          <li>2035 climate projections</li>
-          <li>JRC depth-damage curves</li>
-        </ul>
+    <div class="lp-section">
+      <label class="lp-label">PROPERTY VALUE <span class="lp-unit">EUR</span></label>
+      <div class="money-wrap">
+        <span class="money-sym">€</span>
+        <input id="prop-val" type="number" class="lp-input money-inp" placeholder="250,000" min="0" step="5000">
       </div>
+    </div>
 
-      <!-- Loading -->
-      <div id="state-loading" class="rp-state hidden">
-        <svg class="spin-ring" viewBox="0 0 64 64">
-          <circle cx="32" cy="32" r="26" fill="none" stroke-width="3" class="ring-track"/>
-          <circle cx="32" cy="32" r="26" fill="none" stroke-width="3" class="ring-spin"
-            stroke-dasharray="163.4" stroke-dashoffset="82"/>
+    <div class="lp-section">
+      <label class="lp-label">CURRENT ANNUAL PREMIUM <span class="lp-unit">EUR</span></label>
+      <div class="money-wrap">
+        <span class="money-sym">€</span>
+        <input id="curr-prem" type="number" class="lp-input money-inp" placeholder="1,200" min="0" step="100">
+      </div>
+    </div>
+
+    <button id="analyze-btn" class="analyze-btn" disabled>
+      <span id="analyze-btn-label">SELECT A PROPERTY</span>
+      <svg class="analyze-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+        <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12,5 19,12 12,19"/>
+      </svg>
+    </button>
+
+    <div class="layer-controls">
+      <label class="lp-label">MAP LAYER</label>
+      <div class="layer-btns">
+        <button class="layer-btn active" data-layer="dark">DARK</button>
+        <button class="layer-btn" data-layer="streets">STREETS</button>
+        <button class="layer-btn" data-layer="satellite">SAT</button>
+        <button class="layer-btn sv-btn" id="sv-toggle" disabled>360°</button>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Right panel — results -->
+  <aside class="right-panel" id="results-panel">
+
+    <!-- Empty -->
+    <div id="state-empty" class="rp-state">
+      <div class="empty-graphic">
+        <svg viewBox="0 0 88 88" fill="none" width="88" height="88">
+          <circle cx="44" cy="44" r="36" stroke="rgba(0,200,255,.14)" stroke-width="1" stroke-dasharray="4 3"/>
+          <circle cx="44" cy="44" r="22" stroke="rgba(0,200,255,.09)" stroke-width="1"/>
+          <circle cx="44" cy="44" r="8"  stroke="rgba(0,200,255,.12)" stroke-width="1"/>
+          <circle cx="44" cy="44" r="3"  fill="rgba(0,200,255,.35)"/>
+          <line x1="44" y1="6"  x2="44" y2="82" stroke="rgba(0,200,255,.05)" stroke-width="1"/>
+          <line x1="6"  y1="44" x2="82" y2="44" stroke="rgba(0,200,255,.05)" stroke-width="1"/>
         </svg>
-        <div class="loading-title">ANALYZING</div>
-        <div id="loading-step" class="loading-step">Querying Sentinel-1 archive…</div>
+      </div>
+      <div class="empty-title">Awaiting Coordinates</div>
+      <p class="empty-body">Click the map or search for an address to run satellite flood risk analysis and receive an actuary-grade premium recommendation.</p>
+      <div class="empty-features">
+        <div class="ef-item"><span class="ef-dot"></span>10-yr Sentinel-1 SAR flood archive</div>
+        <div class="ef-item"><span class="ef-dot"></span>Copernicus DEM terrain model</div>
+        <div class="ef-item"><span class="ef-dot"></span>2035 C3S climate projections</div>
+        <div class="ef-item"><span class="ef-dot"></span>JRC depth-damage curves</div>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="state-loading" class="rp-state hidden">
+      <div class="scan-wrap">
+        <svg viewBox="0 0 64 64" width="64" height="64">
+          <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(0,200,255,.08)" stroke-width="1.5"/>
+          <circle cx="32" cy="32" r="26" fill="none" stroke="#00ccff" stroke-width="1.5"
+            stroke-dasharray="163" stroke-dashoffset="110" class="scan-ring"/>
+          <circle cx="32" cy="32" r="14" fill="none" stroke="rgba(0,200,255,.15)" stroke-width="1"/>
+          <circle cx="32" cy="32" r="3" fill="rgba(0,200,255,.6)"/>
+        </svg>
+      </div>
+      <div class="loading-title">SCANNING</div>
+      <div id="loading-step" class="loading-step">Querying Sentinel-1 archive…</div>
+    </div>
+
+    <!-- Results -->
+    <div id="state-results" class="rp-results hidden">
+
+      <div class="res-header">
+        <div class="res-coords" id="res-coords">—</div>
+        <div class="res-addr"   id="res-addr"></div>
       </div>
 
-      <!-- Results -->
-      <div id="state-results" class="rp-results hidden">
-
-        <div class="res-location">
-          <div class="res-coords" id="res-coords">—</div>
-          <div class="res-addr" id="res-addr"></div>
-        </div>
-
-        <!-- Gauge + rating -->
-        <div class="gauge-row">
-          <div class="gauge-wrap">
-            <svg class="gauge-svg" viewBox="0 0 120 120">
-              <circle class="g-track" cx="60" cy="60" r="50" fill="none" stroke-width="10"/>
-              <circle class="g-arc" id="g-arc" cx="60" cy="60" r="50" fill="none" stroke-width="10"
-                stroke-dasharray="314.16" stroke-dashoffset="314.16"
-                transform="rotate(-90 60 60)"/>
-            </svg>
-            <div class="gauge-inner">
-              <div class="gauge-pct" id="gauge-pct">—</div>
-              <div class="gauge-lbl">ANNUAL<br>FLOOD RISK</div>
-            </div>
-          </div>
-          <div class="gauge-aside">
-            <div class="risk-pill" id="risk-pill">—</div>
-            <div class="ga-row"><span class="ga-key">CONFIDENCE</span><span class="ga-val" id="ga-conf">—</span></div>
-            <div class="ga-row"><span class="ga-key">FLOOD DEPTH</span><span class="ga-val" id="ga-depth">—</span></div>
+      <!-- Semicircle gauge -->
+      <div class="gauge-section">
+        <div class="gauge-wrap">
+          <svg class="gauge-svg" viewBox="0 0 200 110" overflow="visible">
+            <path class="gauge-track" d="M 18 105 A 84 84 0 0 1 182 105"
+                  fill="none" stroke-width="10" stroke-linecap="round"/>
+            <path class="gauge-fill" id="g-arc" d="M 18 105 A 84 84 0 0 1 182 105"
+                  fill="none" stroke-width="10" stroke-linecap="round"
+                  stroke-dasharray="263.9" stroke-dashoffset="263.9"/>
+          </svg>
+          <div class="gauge-inner">
+            <div class="gauge-pct" id="gauge-pct">—</div>
+            <div class="gauge-sub">ANNUAL FLOOD RISK</div>
           </div>
         </div>
 
-        <!-- Verdict -->
-        <div class="verdict" id="verdict">
-          <div class="verdict-top">
-            <span class="verdict-word" id="v-word">—</span>
-            <span class="verdict-sev" id="v-sev">—</span>
-          </div>
-          <div class="verdict-num" id="v-num">—</div>
-          <div class="verdict-sub" id="v-sub">—</div>
-        </div>
+        <div class="risk-badge" id="risk-pill">—</div>
 
-        <!-- Metrics -->
-        <div class="metrics-grid">
-          <div class="metric-cell">
-            <div class="mc-label">ANNUAL LOSS</div>
-            <div class="mc-val" id="mc-eal">—</div>
+        <div class="gauge-meta">
+          <div class="gm-item">
+            <span class="gm-key">CONFIDENCE</span>
+            <span class="gm-val" id="ga-conf">—</span>
           </div>
-          <div class="metric-cell">
-            <div class="mc-label">REC. PREMIUM</div>
-            <div class="mc-val amber" id="mc-rec">—</div>
-          </div>
-          <div class="metric-cell">
-            <div class="mc-label">CURR. PREMIUM</div>
-            <div class="mc-val" id="mc-curr">—</div>
-          </div>
-          <div class="metric-cell">
-            <div class="mc-label">COVERAGE</div>
-            <div class="mc-val" id="mc-cov">—</div>
+          <span class="gm-divider"></span>
+          <div class="gm-item">
+            <span class="gm-key">FLOOD DEPTH</span>
+            <span class="gm-val" id="ga-depth">—</span>
           </div>
         </div>
-
-        <!-- Breakdown -->
-        <div class="rp-section">
-          <div class="rp-sec-title">RISK FACTOR BREAKDOWN</div>
-          <div id="breakdown-list"></div>
-        </div>
-
-        <!-- Explanation -->
-        <div class="rp-section">
-          <div class="rp-sec-title">ANALYSIS SUMMARY</div>
-          <div class="explanation" id="explanation"></div>
-        </div>
-
-        <div class="res-footer">
-          <span id="rf-ts">—</span>
-          <span id="rf-src" class="rf-mock"></span>
-        </div>
-
       </div>
-    </aside>
 
-  </main>
+      <!-- Verdict -->
+      <div class="verdict-card" id="verdict">
+        <div class="vc-top">
+          <span class="vc-label" id="v-word">—</span>
+          <span class="vc-sev"   id="v-sev">—</span>
+        </div>
+        <div class="vc-number" id="v-num">—</div>
+        <div class="vc-detail" id="v-sub">—</div>
+      </div>
+
+      <!-- Metrics -->
+      <div class="metrics-strip">
+        <div class="ms-item">
+          <div class="ms-label">EXP. ANNUAL LOSS</div>
+          <div class="ms-val" id="mc-eal">—</div>
+        </div>
+        <div class="ms-divider"></div>
+        <div class="ms-item">
+          <div class="ms-label">REC. PREMIUM</div>
+          <div class="ms-val accent" id="mc-rec">—</div>
+        </div>
+        <div class="ms-divider"></div>
+        <div class="ms-item">
+          <div class="ms-label">CURR. PREMIUM</div>
+          <div class="ms-val" id="mc-curr">—</div>
+        </div>
+        <div class="ms-divider"></div>
+        <div class="ms-item">
+          <div class="ms-label">COVERAGE</div>
+          <div class="ms-val" id="mc-cov">—</div>
+        </div>
+      </div>
+
+      <!-- Breakdown -->
+      <div class="detail-section">
+        <div class="ds-title">RISK FACTOR BREAKDOWN</div>
+        <div id="breakdown-list"></div>
+      </div>
+
+      <!-- Summary -->
+      <div class="detail-section">
+        <div class="ds-title">ANALYSIS SUMMARY</div>
+        <div class="summary-text" id="explanation"></div>
+      </div>
+
+      <div class="res-footer">
+        <span id="rf-ts">—</span>
+        <span id="rf-src" class="rf-mock"></span>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- Street view -->
+  <div class="sv-panel hidden" id="sv-panel">
+    <div class="sv-bar">
+      <span class="sv-label">STREET VIEW</span>
+      <span class="sv-coords" id="sv-coords"></span>
+      <button class="sv-close" id="sv-close">✕</button>
+    </div>
+    <iframe id="sv-frame" class="sv-frame" src="" allowfullscreen></iframe>
+  </div>
+
+  <!-- Map hint -->
+  <div class="map-hint" id="map-hint">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+      <circle cx="12" cy="10" r="3"/>
+    </svg>
+    Click map to select a property
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="js/app.js"></script>
