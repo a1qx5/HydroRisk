@@ -37,16 +37,24 @@ function setup() {
   };
 }
 function evaluatePixel(samples) {
-  var minVV = 1.0;
+  var validCount = 0;
+  var darkCount = 0;
   for (var i = 0; i < samples.length; i++) {
-    if (samples[i].VV < minVV) minVV = samples[i].VV;
+    if (samples[i].VV <= 0) continue;  // shadow / nodata pixels return exactly 0
+    validCount++;
+    if (samples[i].VV < 0.03) darkCount++;
   }
-  return [minVV];
+  if (validCount === 0) return [0.0];
+  return [darkCount / validCount];
 }
 """
 
-WATER_THRESHOLD = 0.03
-
+# Fraction of valid (non-shadow) SAR passes where a pixel showed VV < 0.03.
+# Permanent water (river/lake) stays dark in nearly every pass → fraction ≈ 0.90–1.0.
+# Temporary flood shows dark for a few passes → fraction ≈ 0.03–0.50.
+# Always-dry land never reaches threshold → fraction = 0.0.
+_FLOOD_FRAC_LO = 0.07   # ~4 dark passes ≈ 3+ weeks water — filters brief snowmelt/wet soil
+_FLOOD_FRAC_HI = 0.80   # below this = temporary water, not permanent river/lake
 
 def _bounding_box(lat: float, lon: float, margin_km: float = 2.0) -> dict:
     lat_margin = margin_km / 111.0
@@ -69,10 +77,7 @@ def _fetch_s1_image(bbox_coords, start_date: str, end_date: str, config):
             SentinelHubRequest.input_data(
                 data_collection=S1_CDSE,
                 time_interval=(start_date, end_date),
-                other_args={
-                    "processing": {"orthorectify": True, "backCoeff": "SIGMA0_ELLIPSOID"},
-                    "dataFilter": {"orbitDirection": "ASCENDING"},
-                },
+                other_args={"processing": {"orthorectify": True, "backCoeff": "SIGMA0_ELLIPSOID"}},
             )
         ],
         responses=[SentinelHubRequest.output_response("default", MimeType.TIFF)],
@@ -87,26 +92,29 @@ def _fetch_s1_image(bbox_coords, start_date: str, end_date: str, config):
 def _detect_flood(image_array):
     """
     Returns (direct_hit, near_miss).
-    direct_hit: >35% of centre 10% pixels are water.
-    near_miss:  >55% of full bounding box pixels are water.
+    image_array contains per-pixel fraction of valid SAR passes where VV < 0.03.
+    direct_hit: majority of centre 10% pixels show temporary flood fraction.
+    near_miss:  >10% of full bounding box shows temporary flood fraction.
     """
     if image_array is None:
         return False, False
 
     vv = image_array[:, :, 0] if image_array.ndim == 3 else image_array
-    water_mask = vv < WATER_THRESHOLD
+
+    # No valid observations for any pixel → skip
+    if vv.max() < _FLOOD_FRAC_LO:
+        return False, False
+
+    # Temporary flood: fraction in (_FLOOD_FRAC_LO, _FLOOD_FRAC_HI)
+    # Excludes always-dry (0.0) and permanent water bodies (≥0.80)
+    flood_mask = (vv > _FLOOD_FRAC_LO) & (vv < _FLOOD_FRAC_HI)
 
     h, w = vv.shape
     cy, cx = h // 2, w // 2
     margin_y, margin_x = max(1, h // 10), max(1, w // 10)
-    centre = water_mask[cy - margin_y: cy + margin_y, cx - margin_x: cx + margin_x]
-    # 0.35: river+floodplain covers ~35-45% of the 800m centre window
-    # when 256m from the river; strict 0.5 never triggers on raised terraces
-    direct_hit = bool(centre.mean() > 0.35)
-
-    # 0.30: with 1km margin box, mountain slope shadows stay below ~25% of the
-    # 2km×2km area; real floodplain inundations still exceed 30%
-    near_miss = bool(water_mask.mean() > 0.30)
+    centre = flood_mask[cy - margin_y: cy + margin_y, cx - margin_x: cx + margin_x]
+    direct_hit = bool(centre.mean() > 0.05)   # >5% of centre area = property flooded
+    near_miss = bool(flood_mask.mean() > 0.12) # >12% of 4km box = flood reached vicinity
 
     return direct_hit, near_miss
 
@@ -131,7 +139,7 @@ def get_flood_history(lat: float, lon: float) -> dict:
     bbox_coords = (bb["min_lon"], bb["min_lat"], bb["max_lon"], bb["max_lat"])
 
     years = list(range(2014, 2026))
-    windows = [("03-01", "05-31"), ("09-01", "11-30")]
+    windows = [("01-01", "12-31")]  # full year — captures all flood seasons globally
 
     flood_events = 0
     direct_hits = 0
