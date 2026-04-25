@@ -16,6 +16,10 @@ let svMap        = null;
 let tacticalOverlay = null;
 let analysisOverlays = [];
 let currentAnalysisData = null;
+// Mitigation designer state
+let mitigationDrawLayer = null;
+let mitigationDrawControl = null;
+let mitigationActive    = false;
 
 // ── Tile layers ───────────────────────────────────────────────────
 const TILE_LAYERS = {
@@ -84,6 +88,7 @@ function selectLocation(lat, lon, addr = null) {
   map.setView([lat, lon], Math.max(map.getZoom(), 14), { animate: true });
   document.getElementById('analyze-btn').disabled = false;
   document.getElementById('sv-toggle').disabled = false;
+  document.getElementById('mitigation-btn').disabled = false;
 }
 
 function makeCrosshair(lat, lng) {
@@ -644,3 +649,281 @@ function renderHeatmap(clusters) {
 
 function fmt(n) { return Math.round(n || 0).toLocaleString('de-DE'); }
 function reverseGeocode(lat, lon) { /* Photon doesn't do reverse well, skipping for speed */ }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MITIGATION DESIGNER
+// ══════════════════════════════════════════════════════════════════════════════
+
+window.toggleMitigationDesigner = function() {
+  const panel = document.getElementById('mitigation-panel');
+  if (!mitigationActive) {
+    // Open panel
+    panel.classList.remove('hidden');
+    void panel.offsetWidth;
+    panel.style.transform = 'translateX(0)';
+    document.getElementById('mitigation-btn-label').textContent = 'CLOSE DESIGNER';
+    mitigationActive = true;
+
+    // Init draw layer once
+    if (!mitigationDrawLayer) {
+      mitigationDrawLayer = new L.FeatureGroup().addTo(map);
+    }
+  } else {
+    window.closeMitigationPanel();
+  }
+};
+
+window.closeMitigationPanel = function() {
+  const panel = document.getElementById('mitigation-panel');
+  panel.style.transform = 'translateX(100%)';
+  setTimeout(() => panel.classList.add('hidden'), 400);
+  document.getElementById('mitigation-btn-label').textContent = 'MITIGATION DESIGNER';
+  mitigationActive = false;
+  _deactivateDrawControl();
+};
+
+window.activateMitigationTool = function(type) {
+  _deactivateDrawControl();
+
+  // Highlight active tool button
+  ['barrier','basin'].forEach(t => {
+    const el = document.getElementById(`mit-tool-${t}`);
+    el.style.background = t === type ? 'rgba(0,209,150,0.2)' : '';
+    el.style.borderColor = t === type ? '#00d196' : 'rgba(0,209,150,0.3)';
+  });
+
+  const drawOpts = type === 'barrier'
+    ? { polyline: { shapeOptions: { color: '#00d196', weight: 3, dashArray: '6 4', className: 'mitigation-barrier' } }, polygon: false, rectangle: false, circle: false, marker: false, circlemarker: false }
+    : { polygon: { shapeOptions: { color: '#00d196', fillColor: 'rgba(0,209,150,0.15)', weight: 2, className: 'mitigation-basin' } }, polyline: false, rectangle: false, circle: false, marker: false, circlemarker: false };
+
+  mitigationDrawControl = new L.Control.Draw({
+    draw: drawOpts,
+    edit: { featureGroup: mitigationDrawLayer }
+  });
+  map.addControl(mitigationDrawControl);
+
+  // Auto-start the right draw mode
+  if (type === 'barrier') {
+    new L.Draw.Polyline(map, drawOpts.polyline).enable();
+  } else {
+    new L.Draw.Polygon(map, drawOpts.polygon).enable();
+  }
+
+  // Listen for created shapes
+  map.off(L.Draw.Event.CREATED);
+  map.on(L.Draw.Event.CREATED, function(e) {
+    const layer = e.layer;
+    _updateShapeLabel(layer, e.layerType);
+    mitigationDrawLayer.addLayer(layer);
+    _runMitigationSimulation();
+  });
+  map.on(L.Draw.Event.EDITED, function(e) {
+    e.layers.eachLayer(layer => {
+      _updateShapeLabel(layer);
+    });
+    _runMitigationSimulation();
+  });
+  map.on(L.Draw.Event.DELETED, _runMitigationSimulation);
+};
+
+function _updateShapeLabel(layer, type) {
+  let text = '';
+  if (type === 'polyline' || layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+    const latlngs = layer.getLatLngs();
+    let dist = 0;
+    for (let i = 0; i < latlngs.length - 1; i++) {
+      dist += latlngs[i].distanceTo(latlngs[i+1]);
+    }
+    text = `BARRIER: ${Math.round(dist)}m`;
+  } else {
+    const latlngs = layer.getLatLngs()[0];
+    let area = 0;
+    try {
+      area = L.GeometryUtil.geodesicArea(latlngs);
+    } catch(e) {
+      // Fallback: simple shoelace if GeometryUtil is missing
+      for (let i = 0; i < latlngs.length; i++) {
+        let j = (i + 1) % latlngs.length;
+        area += latlngs[i].lng * latlngs[j].lat;
+        area -= latlngs[j].lng * latlngs[i].lat;
+      }
+      area = Math.abs(area) * 111000 * 111000 * Math.cos(latlngs[0].lat * Math.PI / 180) / 2;
+    }
+    text = `BASIN: ${Math.round(area).toLocaleString('de-DE')}m²`;
+  }
+
+  if (layer.label) {
+    layer.label.setTooltipContent(text);
+  } else {
+    layer.label = layer.bindTooltip(text, {
+      permanent: true,
+      direction: 'center',
+      className: 'mitigation-label'
+    }).openTooltip();
+  }
+}
+
+window.clearMitigationDrawings = function() {
+  if (mitigationDrawLayer) mitigationDrawLayer.clearLayers();
+  _deactivateDrawControl();
+  ['barrier','basin'].forEach(t => {
+    const el = document.getElementById(`mit-tool-${t}`);
+    if (el) { el.style.background = ''; el.style.borderColor = 'rgba(0,209,150,0.3)'; }
+  });
+  document.getElementById('mit-result-content').classList.add('hidden');
+  document.getElementById('mit-result-loading').style.display = 'block';
+  document.getElementById('mit-result-loading').textContent = 'Draw a barrier or basin on the map to simulate mitigation effects.';
+};
+
+function _deactivateDrawControl() {
+  if (mitigationDrawControl) {
+    try { map.removeControl(mitigationDrawControl); } catch(_) {}
+    mitigationDrawControl = null;
+  }
+}
+
+async function _runMitigationSimulation() {
+  if (!currentAnalysisData || !mitigationDrawLayer) return;
+  const raw = currentAnalysisData.raw_property_data;
+  if (!raw) return;
+
+  // Collect GeoJSON features from drawn layers
+  const geometries = [];
+  mitigationDrawLayer.eachLayer(layer => {
+    const geojson = layer.toGeoJSON();
+    geometries.push(geojson);
+  });
+
+  if (geometries.length === 0) return;
+
+  // Show loading state in panel
+  const loadEl  = document.getElementById('mit-result-loading');
+  const content = document.getElementById('mit-result-content');
+  loadEl.textContent = 'Recalculating...';
+  loadEl.style.display = 'block';
+  content.classList.add('hidden');
+
+  try {
+    const body = {
+      raw_property_data: raw,
+      geometries,
+      property_value:   raw.property_value  || null,
+      current_premium:  raw.current_premium || null,
+    };
+
+    const res = await fetch(`${API_BASE}/api/simulate-mitigation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+
+    _renderMitigationResult(d);
+  } catch (err) {
+    loadEl.textContent = `Simulation error: ${err.message}`;
+  }
+}
+
+function _renderMitigationResult(d) {
+  const loadEl  = document.getElementById('mit-result-loading');
+  const content = document.getElementById('mit-result-content');
+
+  loadEl.style.display = 'none';
+  content.classList.remove('hidden');
+
+  const origPrem = d.original.recommended_premium;
+  const mitPrem  = d.mitigated.recommended_premium;
+  const savings  = -(d.delta.premium_euros);  // negative = saving
+  const savingsPct = -(d.delta.premium_pct);
+
+  document.getElementById('mit-premium-before').textContent = `€${Math.round(origPrem).toLocaleString('de-DE')}`;
+  document.getElementById('mit-premium-after').textContent  = `€${Math.round(mitPrem).toLocaleString('de-DE')}`;
+  document.getElementById('mit-delta-euros').textContent    =
+    savings >= 0 ? `−€${Math.round(savings).toLocaleString('de-DE')} / yr (${savingsPct.toFixed(1)}%)` : 'No change';
+
+  document.getElementById('mit-prob-before').textContent = `${d.original.flood_probability_pct.toFixed(1)}%`;
+  document.getElementById('mit-prob-after').textContent  = `${d.mitigated.flood_probability_pct.toFixed(1)}%`;
+
+  const effectsList = document.getElementById('mit-effects-list');
+  effectsList.innerHTML = '';
+  (d.mitigation_effects || []).forEach(effect => {
+    const el = document.createElement('div');
+    el.style.cssText = 'padding: 8px 10px; background: rgba(0,209,150,0.06); border-left: 2px solid #00d196; font-size: 10px; color: var(--t2); line-height: 1.5;';
+    el.textContent = effect;
+    effectsList.appendChild(el);
+  });
+}
+
+window.generateDossier = function() {
+  const d = currentAnalysisData;
+  if (!d) return;
+
+  const template = document.getElementById('dossier-template');
+  template.style.display = 'block'; // Temporarily show to populate
+
+  // Populate basic info
+  document.getElementById('rep-coords').textContent = `${selectedLat.toFixed(5)}, ${selectedLon.toFixed(5)}`;
+  document.getElementById('rep-date').textContent   = new Date().toLocaleString();
+  
+  const rating = d.risk_rating.toUpperCase();
+  const ratingEl = document.getElementById('rep-rating');
+  ratingEl.textContent = rating;
+  ratingEl.style.borderColor = rating.includes('HIGH') ? '#ff3131' : rating.includes('MEDIUM') ? '#ffb800' : '#00ff41';
+
+  document.getElementById('rep-prob').textContent = `${d.flood_probability_pct.toFixed(1)}%`;
+  document.getElementById('rep-prem').textContent = `€${fmt(d.recommended_premium)}`;
+  document.getElementById('rep-eal').textContent  = `€${fmt(d.expected_annual_loss || 0)}`;
+
+  // Populate breakdown
+  const breakdownList = document.getElementById('rep-breakdown');
+  breakdownList.innerHTML = '';
+  const raw = d.raw_property_data || {};
+  const drivers = [
+    { name: 'TERRAIN ELEVATION', val: `${raw.elevation_m}m`, status: raw.elevation_percentile < 15 ? 'CRITICAL' : 'STABLE' },
+    { name: 'RIVER PROXIMITY', val: `${Math.round(raw.distance_to_river_m)}m`, status: raw.distance_to_river_m < 200 ? 'HIGH RISK' : 'SAFE' },
+    { name: 'FLOOD HISTORY', val: `${raw.flood_events_12yr} events`, status: raw.flood_events_12yr > 1 ? 'SEVERE' : 'NONE' },
+    { name: 'SOIL DRAINAGE', val: `${Math.round(raw.imperviousness_pct*100)}% Imperv.`, status: raw.imperviousness_pct > 0.6 ? 'POOR' : 'GOOD' }
+  ];
+
+  drivers.forEach(dr => {
+    const item = document.createElement('div');
+    item.style.cssText = 'display:flex; justify-content:space-between; font-size:11px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:5px;';
+    item.innerHTML = `<span>${dr.name}</span><span style="color:#888;">${dr.val}</span><span style="color:${dr.status.includes('SAFE')||dr.status.includes('NONE')||dr.status.includes('GOOD')?'#00ff41':'#ff3131'}">${dr.status}</span>`;
+    breakdownList.appendChild(item);
+  });
+
+  // Handle Mitigation
+  const mitSection = document.getElementById('rep-mit-section');
+  const mitContent = document.getElementById('mit-result-content');
+  if (!mitContent.classList.contains('hidden')) {
+    mitSection.style.display = 'block';
+    document.getElementById('rep-mit-prem').textContent  = document.getElementById('mit-premium-after').textContent;
+    document.getElementById('rep-mit-delta').textContent = document.getElementById('mit-delta-euros').textContent;
+    
+    const mitList = document.getElementById('rep-mit-list');
+    mitList.innerHTML = '';
+    document.querySelectorAll('#mit-effects-list div').forEach(div => {
+      const clone = div.cloneNode(true);
+      clone.style.background = 'rgba(255,255,255,0.03)';
+      clone.style.borderLeftColor = '#00d196';
+      mitList.appendChild(clone);
+    });
+  } else {
+    mitSection.style.display = 'none';
+  }
+
+  // Generate PDF
+  const opt = {
+    margin:       0,
+    filename:     `HydroRisk_Dossier_${selectedLat.toFixed(4)}_${selectedLon.toFixed(4)}.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, backgroundColor: '#050505', letterRendering: true },
+    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+  };
+
+  html2pdf().set(opt).from(template).save().then(() => {
+    template.style.display = 'none';
+  });
+};
+

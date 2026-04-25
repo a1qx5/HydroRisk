@@ -17,6 +17,7 @@ from layer2.risk_engine import calculate_probability
 from layer3.premium_calculator import calculate_premium
 from layer3.portfolio_model    import calculate_portfolio_impact
 from layer3.accumulation_model import calculate_accumulation_risk
+from layer3.mitigation_simulator import simulate_mitigation
 from layer1.collector import get_property_data
 
 app = Flask(__name__)
@@ -186,6 +187,67 @@ def accumulation_endpoint():
         result = calculate_accumulation_risk(policies)
         return jsonify(result)
     except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/simulate-mitigation", methods=["POST"])
+def simulate_mitigation_endpoint():
+    """
+    Recalculate risk and premium after user-drawn mitigation geometries.
+
+    Body:
+      raw_property_data  dict    Required — the raw_property_data from /api/analyze
+      geometries         list    GeoJSON Feature list (LineString=barrier, Polygon=basin)
+      property_value     float   Optional
+      current_premium    float   Optional
+      loss_ratio         float   Optional
+    """
+    body = request.get_json(force=True, silent=True) or {}
+
+    raw_property_data = body.get("raw_property_data")
+    geometries        = body.get("geometries", [])
+    if not raw_property_data:
+        return jsonify({"error": "raw_property_data is required"}), 400
+
+    property_value, current_premium, loss_ratio, err = _parse_floats(
+        body, "property_value", "current_premium", "loss_ratio"
+    )
+    if err:
+        return err
+
+    try:
+        # Original scores
+        original_prob   = calculate_probability(raw_property_data)
+        original_result = calculate_premium(original_prob, property_value, current_premium, loss_ratio)
+
+        # Mitigated scores
+        mitigation_out  = simulate_mitigation(raw_property_data, geometries)
+        adjusted_data   = mitigation_out["adjusted_property_data"]
+        mitigated_prob  = calculate_probability(adjusted_data)
+        mitigated_result = calculate_premium(mitigated_prob, property_value, current_premium, loss_ratio)
+
+        # Delta
+        orig_premium = original_result["recommended_premium"]
+        mit_premium  = mitigated_result["recommended_premium"]
+        delta_euros  = round(mit_premium - orig_premium, 2)
+        delta_pct    = round((delta_euros / orig_premium * 100) if orig_premium > 0 else 0, 2)
+
+        return jsonify({
+            "original":          original_result,
+            "mitigated":         mitigated_result,
+            "mitigation_effects": mitigation_out["mitigation_effects"],
+            "delta": {
+                "premium_euros":     delta_euros,
+                "premium_pct":       delta_pct,
+                "probability_delta": round(
+                    mitigated_prob["annual_flood_probability"]
+                    - original_prob["annual_flood_probability"], 4
+                ),
+            },
+        })
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(exc)}), 500
 
 
