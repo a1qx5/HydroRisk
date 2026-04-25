@@ -17,6 +17,7 @@ from layer2.risk_engine import calculate_probability
 from layer3.premium_calculator import calculate_premium
 from layer3.portfolio_model    import calculate_portfolio_impact
 from layer3.accumulation_model import calculate_accumulation_risk
+from layer1.collector import get_property_data
 
 app = Flask(__name__)
 CORS(app)
@@ -95,9 +96,17 @@ def demo():
         return jsonify({"error": str(exc)}), 500
 
 
-@app.route("/api/analyze", methods=["POST"])
+@app.route("/api/analyze", methods=["POST", "GET"])
 def analyze():
-    body = request.get_json(force=True, silent=True) or {}
+    if request.method == "POST":
+        body = request.get_json(force=True, silent=True) or {}
+    else:
+        body = {
+            "lat": request.args.get("lat"),
+            "lon": request.args.get("lon"),
+            "property_value": request.args.get("property_value"),
+            "current_premium": request.args.get("current_premium")
+        }
 
     lat = body.get("lat")
     lon = body.get("lon")
@@ -115,13 +124,15 @@ def analyze():
         return err
 
     try:
-        from layer1.collector import get_property_data
         property_data    = get_property_data(lat, lon)
         probability_data = calculate_probability(property_data)
         result           = calculate_premium(probability_data, property_value, current_premium, loss_ratio)
         result["raw_property_data"] = property_data
         return jsonify(result)
     except Exception as exc:
+        import traceback
+        with open("error.log", "w") as f:
+            f.write(traceback.format_exc())
         return jsonify({"error": str(exc)}), 500
 
 

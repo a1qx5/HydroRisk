@@ -5,250 +5,326 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HydroRisk — Flood Risk Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Global Loader Styles */
+    #global-loader {
+      position: fixed; inset: 0; z-index: 3000;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+    #global-loader.hidden {
+      opacity: 0; visibility: hidden; pointer-events: none;
+    }
+    .gl-backdrop {
+      position: absolute; inset: 0; background: rgba(5, 5, 5, 0.9);
+      backdrop-filter: blur(8px);
+    }
+    .gl-content {
+      position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 24px;
+    }
+    .gl-logo { position: relative; width: 80px; height: 80px; }
+    .gl-spin { transform-origin: center; animation: gl-spin 4s linear infinite; }
+    .gl-spin-reverse { transform-origin: center; animation: gl-spin 6s linear infinite reverse; }
+    .gl-pulse { transform-origin: center; animation: gl-pulse 2s ease-in-out infinite alternate; }
+    @keyframes gl-spin { 100% { transform: rotate(360deg); } }
+    @keyframes gl-pulse { 0% { transform: scale(0.9); opacity: 0.8; } 100% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 15px var(--cyan)); } }
+    .gl-text {
+      color: var(--cyan); font-family: 'Space Grotesk', monospace; font-size: 14px;
+      letter-spacing: 0.3em; font-weight: 700; text-transform: uppercase;
+      text-shadow: 0 0 10px var(--cyan-glow);
+    }
+    .gl-bar-container { width: 250px; height: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; position: relative; border-radius: 1px; }
+    .gl-bar-fill { height: 100%; width: 0%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); transition: width 2.5s ease; }
+
+    @keyframes pop-in {
+      0% { opacity: 0; transform: scale(0.85) translateY(10px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    
+    .dash-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2010; background: rgba(5,5,5,0.5); border: 1px solid var(--cyan-bdr); border-radius: 50%; padding: 10px; transition: all 0.2s; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--cyan); }
+    .dash-arrow:hover { background: var(--cyan-dim); box-shadow: 0 0 20px var(--cyan-glow); border-color: var(--cyan); }
+    .dash-arrow-left { left: 40px; }
+    .dash-arrow-right { right: 40px; }
+
+    /* Custom Sliders for Portfolio Modal */
+    .sg-group { display: flex; flex-direction: column; gap: 10px; }
+    .sg-header { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); }
+    .sg-label { font-size: 11px; color: var(--t2); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+    .sg-val { font-size: 14px; font-weight: 700; color: var(--cyan); }
+    .sg-range { -webkit-appearance: none; width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; outline: none; transition: background 0.2s; }
+    .sg-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--t2); cursor: pointer; border: 3px solid #111; transition: all .15s; }
+    .sg-range:active::-webkit-slider-thumb, .sg-range:hover::-webkit-slider-thumb { background: var(--cyan); border-color: #000; box-shadow: 0 0 10px var(--cyan-glow); }
+  </style>
 </head>
 <body>
+  
+  <div id="global-loader" class="hidden">
+    <div class="gl-backdrop"></div>
+    <div class="gl-content">
+      <div class="gl-logo">
+        <svg viewBox="0 0 22 22" fill="none" width="80" height="80" style="color: var(--cyan);">
+          <circle cx="11" cy="11" r="3.5" stroke="currentColor" stroke-width="1.5" class="gl-pulse"/>
+          <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1" stroke-dasharray="3 2" opacity=".4" class="gl-spin"/>
+          <circle cx="11" cy="11" r="10.5" stroke="currentColor" stroke-width="0.5" stroke-dasharray="1 4" opacity=".2" class="gl-spin-reverse"/>
+        </svg>
+      </div>
+      <div class="gl-text" id="gl-stage-text">INITIALIZING...</div>
+      <div class="gl-bar-container">
+        <div class="gl-bar-fill" id="gl-progress-bar"></div>
+      </div>
+    </div>
+  </div>
 
-  <!-- Map fills entire screen -->
   <div id="map"></div>
 
-  <!-- Top strip -->
   <header class="top-strip">
-    <div class="ts-brand">
-      <svg viewBox="0 0 22 22" fill="none" width="16" height="16" class="ts-icon">
+    <div class="ts-brand" style="display: flex; align-items: center; gap: 12px;">
+      <svg viewBox="0 0 22 22" fill="none" width="20" height="20" style="color: var(--cyan);">
         <circle cx="11" cy="11" r="3.5" stroke="currentColor" stroke-width="1.5"/>
-        <circle cx="11" cy="11" r="8"   stroke="currentColor" stroke-width="1" stroke-dasharray="3.5 2.5" opacity=".5"/>
-        <circle cx="11" cy="11" r="10.5" stroke="currentColor" stroke-width=".8" stroke-dasharray="2 3" opacity=".25"/>
+        <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1" stroke-dasharray="3 2" opacity=".4"/>
       </svg>
-      <span class="ts-name">HYDRORISK</span>
-      <span class="ts-divider"></span>
-      <span class="ts-sub">Satellite Flood Intelligence</span>
+      <span style="font-weight: 700; letter-spacing: 0.3em; font-size: 14px;">HYDRORISK</span>
+      <span style="width: 1px; height: 16px; background: var(--bdr);"></span>
+      <span style="font-size: 10px; color: var(--t2); letter-spacing: 0.1em;">SATELLITE INTELLIGENCE</span>
     </div>
-    <div class="ts-right">
-      <span class="ts-live"><span class="live-dot"></span>COPERNICUS ACTIVE</span>
-      <span class="ts-sep"></span>
-      <span class="ts-meta">Sentinel-1 · DEM · C3S · JRC</span>
+    <div class="ts-meta" style="font-size: 10px; color: var(--t3); letter-spacing: 0.1em;">
+      SENTINEL-1 · COPERNICUS DEM · C3S
     </div>
   </header>
 
-  <!-- Left panel — input -->
   <aside class="left-panel">
-
-    <div class="lp-section">
-      <label class="lp-label">PROPERTY SEARCH</label>
-      <div class="search-wrap">
-        <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input id="addr-input" type="text" class="lp-input" placeholder="Address or lat, lon…" autocomplete="off" spellcheck="false">
-      </div>
-      <div id="search-dropdown" class="search-dropdown hidden"></div>
+    <div class="mode-switcher">
+      <button id="mode-property" class="mode-btn active">PROPERTY</button>
+      <button id="mode-portfolio" class="mode-btn">PORTFOLIO</button>
     </div>
 
-    <div class="lp-section">
-      <label class="lp-label">COORDINATES</label>
-      <div class="coord-row">
-        <div class="coord-field">
-          <span class="coord-key">LAT</span>
-          <input id="lat-input" type="number" class="coord-input" placeholder="46.5670" step="0.0001">
-        </div>
-        <span class="coord-sep">·</span>
-        <div class="coord-field">
-          <span class="coord-key">LON</span>
-          <input id="lon-input" type="number" class="coord-input" placeholder="26.9146" step="0.0001">
+    <!-- Individual Property Section -->
+    <div id="section-property">
+      <div class="lp-section">
+        <label class="lp-label">TARGET SEARCH</label>
+        <div class="search-wrap">
+          <input id="addr-input" type="text" class="lp-input" placeholder="Address or lat, lon…" autocomplete="off">
+          <div id="search-dropdown" class="search-dropdown hidden"></div>
         </div>
       </div>
-    </div>
 
-    <div class="lp-rule"></div>
-
-    <div class="lp-section">
-      <label class="lp-label">PROPERTY VALUE <span class="lp-unit">EUR</span></label>
-      <div class="money-wrap">
-        <span class="money-sym">€</span>
-        <input id="prop-val" type="number" class="lp-input money-inp" placeholder="250,000" min="0" step="5000">
+      <div class="lp-section">
+        <label class="lp-label">COORDINATES</label>
+        <div class="coord-row">
+          <div class="coord-field"><span class="coord-key">LAT</span><input id="lat-input" type="number" class="coord-input" step="0.0001"></div>
+          <div class="coord-field"><span class="coord-key">LON</span><input id="lon-input" type="number" class="coord-input" step="0.0001"></div>
+        </div>
       </div>
-    </div>
 
-    <div class="lp-section">
-      <label class="lp-label">CURRENT ANNUAL PREMIUM <span class="lp-unit">EUR</span></label>
-      <div class="money-wrap">
-        <span class="money-sym">€</span>
-        <input id="curr-prem" type="number" class="lp-input money-inp" placeholder="1,200" min="0" step="100">
+      <div class="lp-section">
+        <label class="lp-label">FINANCIAL DATA <span class="lp-unit">EUR</span></label>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="position: relative;">
+            <span style="position: absolute; left: 12px; top: 12px; color: var(--t3); font-size: 13px;">€</span>
+            <input id="prop-val" type="number" class="lp-input" style="padding-left: 28px;" placeholder="Property Value">
+          </div>
+          <div style="position: relative;">
+            <span style="position: absolute; left: 12px; top: 12px; color: var(--t3); font-size: 13px;">€</span>
+            <input id="curr-prem" type="number" class="lp-input" style="padding-left: 28px;" placeholder="Current Premium">
+          </div>
+        </div>
       </div>
+
+      <button id="analyze-btn" class="analyze-btn" disabled>
+        <span id="analyze-btn-label">ACQUIRE TARGET</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
     </div>
 
-    <button id="analyze-btn" class="analyze-btn" disabled>
-      <span id="analyze-btn-label">SELECT A PROPERTY</span>
-      <svg class="analyze-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
-        <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12,5 19,12 12,19"/>
-      </svg>
-    </button>
+    <!-- Portfolio Section -->
+    <div id="section-portfolio" class="hidden">
+      <div class="lp-section" style="margin-top: 20px;">
+        <button class="analyze-btn" onclick="window.openPortfolioModal()">
+          <span>OPEN PORTFOLIO SIMULATOR</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
 
-    <div class="layer-controls">
-      <label class="lp-label">MAP LAYER</label>
+      <button id="scan-accumulation-btn" class="analyze-btn" style="border-color: rgba(255, 49, 49, 0.2); color: var(--risk-high); background: rgba(255, 49, 49, 0.05); margin-top: 20px;">
+        <span>ACCUMULATION SCAN</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      </button>
+    </div>
+
+    <div style="margin-top: auto; padding-top: 20px;">
+      <label class="lp-label">IMAGERY SENSOR</label>
       <div class="layer-btns">
         <button class="layer-btn active" data-layer="dark">DARK</button>
         <button class="layer-btn" data-layer="streets">STREETS</button>
         <button class="layer-btn" data-layer="satellite">SAT</button>
-        <button class="layer-btn sv-btn" id="sv-toggle" disabled>360°</button>
+        <button class="layer-btn" id="sv-toggle" disabled>360°</button>
       </div>
-    </div>
-
-  </aside>
-
-  <!-- Right panel — results -->
-  <aside class="right-panel" id="results-panel">
-
-    <!-- Empty -->
-    <div id="state-empty" class="rp-state">
-      <div class="empty-graphic">
-        <svg viewBox="0 0 88 88" fill="none" width="88" height="88">
-          <circle cx="44" cy="44" r="36" stroke="rgba(0,200,255,.14)" stroke-width="1" stroke-dasharray="4 3"/>
-          <circle cx="44" cy="44" r="22" stroke="rgba(0,200,255,.09)" stroke-width="1"/>
-          <circle cx="44" cy="44" r="8"  stroke="rgba(0,200,255,.12)" stroke-width="1"/>
-          <circle cx="44" cy="44" r="3"  fill="rgba(0,200,255,.35)"/>
-          <line x1="44" y1="6"  x2="44" y2="82" stroke="rgba(0,200,255,.05)" stroke-width="1"/>
-          <line x1="6"  y1="44" x2="82" y2="44" stroke="rgba(0,200,255,.05)" stroke-width="1"/>
-        </svg>
-      </div>
-      <div class="empty-title">Awaiting Coordinates</div>
-      <p class="empty-body">Click the map or search for an address to run satellite flood risk analysis and receive an actuary-grade premium recommendation.</p>
-      <div class="empty-features">
-        <div class="ef-item"><span class="ef-dot"></span>12-yr Sentinel-1 SAR flood archive</div>
-        <div class="ef-item"><span class="ef-dot"></span>Copernicus DEM terrain model</div>
-        <div class="ef-item"><span class="ef-dot"></span>2035 C3S climate projections</div>
-        <div class="ef-item"><span class="ef-dot"></span>JRC depth-damage curves</div>
-      </div>
-    </div>
-
-    <!-- Loading -->
-    <div id="state-loading" class="rp-state hidden">
-      <div class="scan-wrap">
-        <svg viewBox="0 0 64 64" width="64" height="64">
-          <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(0,200,255,.08)" stroke-width="1.5"/>
-          <circle cx="32" cy="32" r="26" fill="none" stroke="#00ccff" stroke-width="1.5"
-            stroke-dasharray="163" stroke-dashoffset="110" class="scan-ring"/>
-          <circle cx="32" cy="32" r="14" fill="none" stroke="rgba(0,200,255,.15)" stroke-width="1"/>
-          <circle cx="32" cy="32" r="3" fill="rgba(0,200,255,.6)"/>
-        </svg>
-      </div>
-      <div class="loading-title">SCANNING</div>
-      <div id="loading-step" class="loading-step">Querying Sentinel-1 archive…</div>
-    </div>
-
-    <!-- Results -->
-    <div id="state-results" class="rp-results hidden">
-
-      <div class="res-header">
-        <div class="res-coords" id="res-coords">—</div>
-        <div class="res-addr"   id="res-addr"></div>
-      </div>
-
-      <!-- Semicircle gauge -->
-      <div class="gauge-section">
-        <div class="gauge-wrap">
-          <svg class="gauge-svg" viewBox="0 0 200 110" overflow="visible">
-            <path class="gauge-track" d="M 18 105 A 84 84 0 0 1 182 105"
-                  fill="none" stroke-width="10" stroke-linecap="round"/>
-            <path class="gauge-fill" id="g-arc" d="M 18 105 A 84 84 0 0 1 182 105"
-                  fill="none" stroke-width="10" stroke-linecap="round"
-                  stroke-dasharray="263.9" stroke-dashoffset="263.9"/>
-          </svg>
-          <div class="gauge-inner">
-            <div class="gauge-pct" id="gauge-pct">—</div>
-            <div class="gauge-sub">ANNUAL FLOOD RISK</div>
-          </div>
-        </div>
-
-        <div class="risk-badge" id="risk-pill">—</div>
-
-        <div class="gauge-meta">
-          <div class="gm-item">
-            <span class="gm-key">CONFIDENCE</span>
-            <span class="gm-val" id="ga-conf">—</span>
-          </div>
-          <span class="gm-divider"></span>
-          <div class="gm-item">
-            <span class="gm-key">FLOOD DEPTH</span>
-            <span class="gm-val" id="ga-depth">—</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Verdict -->
-      <div class="verdict-card" id="verdict">
-        <div class="vc-top">
-          <span class="vc-label" id="v-word">—</span>
-          <span class="vc-sev"   id="v-sev">—</span>
-        </div>
-        <div class="vc-number" id="v-num">—</div>
-        <div class="vc-detail" id="v-sub">—</div>
-      </div>
-
-      <!-- Metrics -->
-      <div class="metrics-strip">
-        <div class="ms-item">
-          <div class="ms-label">EXP. ANNUAL LOSS</div>
-          <div class="ms-val" id="mc-eal">—</div>
-        </div>
-        <div class="ms-divider"></div>
-        <div class="ms-item">
-          <div class="ms-label">REC. PREMIUM</div>
-          <div class="ms-val accent" id="mc-rec">—</div>
-        </div>
-        <div class="ms-divider"></div>
-        <div class="ms-item">
-          <div class="ms-label">CURR. PREMIUM</div>
-          <div class="ms-val" id="mc-curr">—</div>
-        </div>
-        <div class="ms-divider"></div>
-        <div class="ms-item">
-          <div class="ms-label">COVERAGE</div>
-          <div class="ms-val" id="mc-cov">—</div>
-        </div>
-      </div>
-
-      <!-- Breakdown -->
-      <div class="detail-section">
-        <div class="ds-title">RISK FACTOR BREAKDOWN</div>
-        <div id="breakdown-list"></div>
-      </div>
-
-      <!-- Summary -->
-      <div class="detail-section">
-        <div class="ds-title">ANALYSIS SUMMARY</div>
-        <div class="summary-text" id="explanation"></div>
-      </div>
-
-      <div class="res-footer">
-        <span id="rf-ts">—</span>
-        <span id="rf-src" class="rf-mock"></span>
-      </div>
-
     </div>
   </aside>
 
-  <!-- Street view -->
-  <div class="sv-panel hidden" id="sv-panel">
-    <div class="sv-bar">
-      <span class="sv-label">STREET VIEW</span>
-      <span class="sv-coords" id="sv-coords"></span>
-      <button class="sv-close" id="sv-close">✕</button>
+  <!-- Dashboard Overlay -->
+  <div id="dashboard-overlay" class="dash-overlay hidden">
+    <div class="dash-backdrop" onclick="window.closeDashboard()"></div>
+    
+    <button class="dash-arrow dash-arrow-left" onclick="window.navigateDashboard(-1)">
+       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+
+    <div class="dash-container">
+      <header class="dash-header">
+        <div>
+          <div class="dh-title">INTELLIGENCE REPORT</div>
+          <div id="dash-coords" style="font-size: 11px; color: var(--t3); font-family: monospace; margin-top: 4px;"></div>
+        </div>
+        <button class="dh-close" onclick="window.closeDashboard()">[ CLOSE ]</button>
+      </header>
+
+      <div class="dash-grid">
+        <!-- Card 1: Risk -->
+        <div class="dash-card" id="dash-sec-risk">
+          <div class="dc-title">FLOOD RISK PROBABILITY</div>
+          <div style="font-size: 32px; font-weight: 700; color: var(--t1);" id="dash-gauge-pct">0%</div>
+          <div class="gr-matrix" id="dash-matrix"></div>
+          <div class="risk-badge" id="dash-risk-badge">MEDIUM RISK</div>
+        </div>
+
+        <!-- Card 2: Financials -->
+        <div class="dash-card" id="dash-sec-fin">
+          <div class="dc-title">PREMIUM ANALYSIS</div>
+          <div class="metrics-strip">
+            <div class="ms-item"><div class="ms-label">EXP. ANNUAL LOSS</div><div class="ms-val" id="dash-eal">—</div></div>
+            <div class="ms-divider"></div>
+            <div class="ms-item"><div class="ms-label">REC. PREMIUM</div><div class="ms-val accent" id="dash-rec">—</div></div>
+          </div>
+          <div class="metrics-strip" style="border-top: none; padding-top: 0;">
+            <div class="ms-item"><div class="ms-label">CURR. PREMIUM</div><div class="ms-val" id="dash-curr">—</div></div>
+            <div class="ms-divider"></div>
+            <div class="ms-item"><div class="ms-label">COVERAGE</div><div class="ms-val" id="dash-cov">—</div></div>
+          </div>
+        </div>
+
+        <!-- Card 3: Breakdown -->
+        <div class="dash-card" id="dash-sec-brk">
+          <div class="dc-title">RISK DRIVERS</div>
+          <div id="dash-breakdown-list"></div>
+        </div>
+
+        <!-- Card 4: Portfolio -->
+        <div class="dash-card hidden" id="dash-sec-portfolio">
+          <div class="dc-title">PORTFOLIO IMPACT</div>
+          <div class="metrics-strip">
+            <div class="ms-item"><div class="ms-label">PROFIT LIFT</div><div class="ms-val accent" id="port-profit-imp">—</div></div>
+            <div class="ms-divider"></div>
+            <div class="ms-item"><div class="ms-label">NET BENEFIT</div><div class="ms-val" id="port-net-benefit">—</div></div>
+          </div>
+          <div id="port-explanation" style="font-size: 12px; color: var(--t2); line-height: 1.6; margin-top: 15px;"></div>
+        </div>
+
+        <!-- Card 5: Verdict -->
+        <div class="dash-card" id="dash-sec-verdict">
+          <div class="dc-title">FINAL VERDICT</div>
+          <div class="verdict-card" id="dash-verdict">
+            <div style="font-size: 11px; font-weight: 700; color: var(--cyan);" id="dash-v-word">—</div>
+            <div style="font-size: 28px; font-weight: 700; margin: 10px 0;" id="dash-v-num">—</div>
+            <div style="font-size: 11px; color: var(--t2);" id="dash-v-sub">—</div>
+          </div>
+        </div>
+      </div>
     </div>
-    <iframe id="sv-frame" class="sv-frame" src="" allowfullscreen></iframe>
+    
+    <button class="dash-arrow dash-arrow-right" onclick="window.navigateDashboard(1)">
+       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </button>
   </div>
 
-  <!-- Map hint -->
-  <div class="map-hint" id="map-hint">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-      <circle cx="12" cy="10" r="3"/>
-    </svg>
-    Click map to select a property
-  </div>
+  <div id="portfolio-modal" class="hidden" style="position: fixed; inset: 0; z-index: 4000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); backdrop-filter: blur(12px); opacity: 0; transition: opacity 0.3s; pointer-events: none;">
+    <div style="background: var(--panel-bg); border: 1px solid var(--cyan-bdr); width: 900px; max-width: 95vw; border-radius: 4px; padding: 40px; box-shadow: 0 20px 60px rgba(0,209,255,0.1); pointer-events: auto; transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);" id="pm-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px;">
+        <h2 style="font-size: 14px; letter-spacing: 0.3em; color: var(--cyan); font-weight: 700;">PORTFOLIO IMPACT SIMULATOR</h2>
+        <button onclick="window.closePortfolioModal()" style="color: var(--t3); font-size: 12px; font-weight: 700; transition: color 0.2s;" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--t3)'">[ CLOSE ]</button>
+      </div>
+      
+      <!-- Sliders Grid -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 50px; margin-bottom: 40px;">
+        
+        <!-- Col 1 -->
+        <div style="display: flex; flex-direction: column; gap: 30px;">
+          <div class="sg-group">
+            <div class="sg-header"><span class="sg-label">Portfolio size (policies)</span><span class="sg-val" id="val-size">240,000</span></div>
+            <input type="range" class="sg-range" id="sl-size" min="10000" max="1000000" step="10000" value="240000">
+          </div>
+          <div class="sg-group">
+            <div class="sg-header"><span class="sg-label">Avg. annual premium</span><span class="sg-val" id="val-prem">€1,500</span></div>
+            <input type="range" class="sg-range" id="sl-prem" min="200" max="5000" step="50" value="1500">
+          </div>
+          <div class="sg-group">
+            <div class="sg-header"><span class="sg-label">Current loss ratio</span><span class="sg-val" id="val-loss">85.0%</span></div>
+            <input type="range" class="sg-range" id="sl-loss" min="0.4" max="1.2" step="0.005" value="0.85">
+          </div>
+        </div>
+
+        <!-- Col 2 -->
+        <div style="display: flex; flex-direction: column; gap: 30px;">
+          <div class="sg-group">
+            <div class="sg-header"><span class="sg-label">Expense ratio</span><span class="sg-val" id="val-exp">30.0%</span></div>
+            <input type="range" class="sg-range" id="sl-exp" min="0.1" max="0.5" step="0.005" value="0.30">
+          </div>
+          <div class="sg-group">
+            <div class="sg-header"><span class="sg-label">% of portfolio mispriced</span><span class="sg-val" id="val-mispct">20.0%</span></div>
+            <input type="range" class="sg-range" id="sl-mispct" min="0.05" max="0.5" step="0.005" value="0.20">
+          </div>
+          <div class="sg-group">
+            <div class="sg-header"><span class="sg-label">Avg. mispricing per policy</span><span class="sg-val" id="val-misval">€400</span></div>
+            <input type="range" class="sg-range" id="sl-misval" min="50" max="2000" step="50" value="400">
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Comparison Cards -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+        <div style="background: var(--card-bg); border-radius: 4px; padding: 24px; border: 1px solid var(--bdr);">
+          <div style="font-size: 11px; color: var(--t3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 24px; font-weight: 700;">WITHOUT MODEL</div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 24px; font-family: var(--font-mono);">
+            <div><div style="font-size: 10px; color: var(--t2); margin-bottom: 6px; letter-spacing: 0.1em;">LOSS RATIO</div><div style="font-size: 26px; font-weight: 600;" id="out-w-loss">85.0%</div></div>
+            <div><div style="font-size: 10px; color: var(--t2); margin-bottom: 6px; letter-spacing: 0.1em;">COMBINED RATIO</div><div style="font-size: 26px; font-weight: 600;" id="out-w-comb">115.0%</div></div>
+          </div>
+          <div style="font-family: var(--font-mono);"><div style="font-size: 10px; color: var(--t2); margin-bottom: 6px; letter-spacing: 0.1em;">UNDERWRITING RESULT</div><div style="font-size: 26px; font-weight: 600; color: var(--risk-high);" id="out-w-ur">-€54.0M</div></div>
+        </div>
+
+        <div style="background: rgba(0, 209, 255, 0.05); border-radius: 4px; padding: 24px; border: 1px solid var(--cyan); box-shadow: 0 0 20px var(--cyan-glow);">
+          <div style="font-size: 11px; color: var(--cyan); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 24px; font-weight: 700;">WITH FLOOD RISK MODEL</div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 24px; font-family: var(--font-mono);">
+            <div><div style="font-size: 10px; color: var(--t2); margin-bottom: 6px; letter-spacing: 0.1em;">LOSS RATIO</div><div style="font-size: 26px; font-weight: 600;" id="out-wm-loss">80.7%</div></div>
+            <div><div style="font-size: 10px; color: var(--t2); margin-bottom: 6px; letter-spacing: 0.1em;">COMBINED RATIO</div><div style="font-size: 26px; font-weight: 600;" id="out-wm-comb">110.7%</div></div>
+          </div>
+          <div style="font-family: var(--font-mono);"><div style="font-size: 10px; color: var(--t2); margin-bottom: 6px; letter-spacing: 0.1em;">UNDERWRITING RESULT</div><div style="font-size: 26px; font-weight: 600; color: var(--risk-high);" id="out-wm-ur">-€40.6M</div></div>
+        </div>
+      </div>
+
+      <!-- Metric Cards -->
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+        <div style="background: var(--card-bg); border-radius: 4px; padding: 16px; border: 1px solid var(--bdr); font-family: var(--font-mono);">
+          <div style="font-size: 10px; color: var(--t2); margin-bottom: 8px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;">ANNUAL IMPROVEMENT</div>
+          <div style="font-size: 20px; font-weight: 600; color: var(--risk-low);" id="out-m-imp">€13.4M</div>
+        </div>
+        <div style="background: var(--card-bg); border-radius: 4px; padding: 16px; border: 1px solid var(--bdr); font-family: var(--font-mono);">
+          <div style="font-size: 10px; color: var(--t2); margin-bottom: 8px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;">PLATFORM COST</div>
+          <div style="font-size: 20px; font-weight: 600; color: var(--t1);" id="out-m-cost">€120K</div>
+          <div style="font-size: 10px; color: var(--t3); margin-top: 6px;">€0.50 / POLICY / YR</div>
+        </div>
+        <div style="background: var(--card-bg); border-radius: 4px; padding: 16px; border: 1px solid var(--bdr); font-family: var(--font-mono);">
+          <div style="font-size: 10px; color: var(--t2); margin-bottom: 8px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;">NET ANNUAL BENEFIT</div>
+          <div style="font-size: 20px; font-weight: 600; color: var(--risk-low);" id="out-m-net">€13.3M</div>
+        </div>
+        <div style="background: var(--card-bg); border-radius: 4px; padding: 16px; border: 1px solid var(--bdr); font-family: var(--font-mono);">
+          <div style="font-size: 10px; color: var(--t2); margin-bottom: 8px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;">ROI ON PLATFORM</div>
+          <div style="font-size: 20px; font-weight: 600; color: var(--risk-low);" id="out-m-roi">11,100%</div>
+        </div>
+      </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="js/app.js"></script>

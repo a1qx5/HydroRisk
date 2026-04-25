@@ -1,7 +1,7 @@
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 import os
 
-load_dotenv()
+load_dotenv(find_dotenv(), override=True)
 
 # API credentials — fill in before running
 SENTINEL_HUB_CLIENT_ID = os.getenv("SENTINEL_HUB_CLIENT_ID", "")      # https://apps.sentinel-hub.com/dashboard/

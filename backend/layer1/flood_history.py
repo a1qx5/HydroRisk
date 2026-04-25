@@ -9,6 +9,7 @@ Output: {
 """
 
 import math
+import os
 
 import numpy as np
 from sentinelhub import (
@@ -122,11 +123,13 @@ def _detect_flood(image_array):
 def get_flood_history(lat: float, lon: float) -> dict:
     """Search Sentinel-1 SAR archive (2014–today) for flood events near this property."""
     from sentinelhub import SHConfig
-    from backend.config import SENTINEL_HUB_CLIENT_ID, SENTINEL_HUB_CLIENT_SECRET
+    from config import SENTINEL_HUB_CLIENT_ID, SENTINEL_HUB_CLIENT_SECRET
 
     config = SHConfig()
-    config.sh_client_id = SENTINEL_HUB_CLIENT_ID
-    config.sh_client_secret = SENTINEL_HUB_CLIENT_SECRET
+    config.sh_client_id = os.environ.get("SH_CLIENT_ID", SENTINEL_HUB_CLIENT_ID)
+    config.sh_client_secret = os.environ.get("SH_CLIENT_SECRET", SENTINEL_HUB_CLIENT_SECRET)
+    config.download_timeout_seconds = 15
+    config.max_download_attempts = 1
     config.sh_base_url = CDSE_BASE_URL
     config.sh_auth_base_url = CDSE_AUTH_URL
     # Required: library defaults to old sentinel-hub.com token endpoint
@@ -145,24 +148,28 @@ def get_flood_history(lat: float, lon: float) -> dict:
     direct_hits = 0
     years_flooded = set()
 
-    for year in years:
-        year_flooded = False
-        for (m_start, m_end) in windows:
-            start = f"{year}-{m_start}"
-            end = f"{year}-{m_end}"
-            try:
-                image = _fetch_s1_image(bbox_coords, start, end, config)
-                hit, near_miss = _detect_flood(image)
-                if hit or near_miss:
-                    flood_events += 1
-                    year_flooded = True
-                if hit:
-                    direct_hits += 1
-            except Exception as e:
-                print(f"[WARN] Sentinel-1 query failed {start}–{end}: {e}")
+    import concurrent.futures
 
-        if year_flooded:
+    def check_year(year):
+        start = f"{year}-01-01"
+        end = f"{year}-12-31"
+        try:
+            image = _fetch_s1_image(bbox_coords, start, end, config)
+            hit, near_miss = _detect_flood(image)
+            return year, hit, near_miss
+        except Exception as e:
+            print(f"[WARN] Sentinel-1 query failed {start}–{end}: {e}")
+            return year, False, False
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+        results = executor.map(check_year, years)
+
+    for year, hit, near_miss in results:
+        if hit or near_miss:
+            flood_events += 1
             years_flooded.add(year)
+        if hit:
+            direct_hits += 1
 
     total_years = len(years)
     probability = len(years_flooded) / total_years
