@@ -71,28 +71,57 @@ def _slope_degrees(dem, row: int, col: int, cell_size_m: float = 30.0) -> float:
     return float(np.degrees(slope_rad))
 
 
+def _fill_depressions(work: np.ndarray, passes: int = 5) -> np.ndarray:
+    """
+    Fill local pits by raising cells that are lower than all 8 neighbours.
+    Operates on a NoData-free surface (NoData already replaced with a high sentinel).
+    Pure-numpy, vectorised — runs in milliseconds on a 333×333 grid.
+    """
+    for _ in range(passes):
+        h, w = work.shape
+        nm = np.full((h, w), np.inf)
+        nm[1:,  :]   = np.minimum(nm[1:,  :],   work[:-1, :])    # north
+        nm[:-1, :]   = np.minimum(nm[:-1, :],   work[1:,  :])    # south
+        nm[:,  1:]   = np.minimum(nm[:,  1:],    work[:,  :-1])   # west
+        nm[:, :-1]   = np.minimum(nm[:, :-1],    work[:,  1:])    # east
+        nm[1:,  1:]  = np.minimum(nm[1:,  1:],   work[:-1, :-1]) # NW
+        nm[:-1, 1:]  = np.minimum(nm[:-1, 1:],   work[1:,  :-1]) # SW
+        nm[1:, :-1]  = np.minimum(nm[1:, :-1],   work[:-1, 1:])  # NE
+        nm[:-1, :-1] = np.minimum(nm[:-1, :-1],  work[1:,  1:])  # SE
+        work = np.where(work < nm, nm, work)
+    return work
+
+
 def _flow_accumulation(dem) -> np.ndarray:
     """
     D8 flow accumulation: for each cell, route flow to the lowest neighbour.
     Returns a 2D array of upstream cell counts.
+    Depressions are filled before routing so flow reaches river channels.
     """
     rows, cols = dem.shape
     neighbours = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 
+    # Build routing surface: NoData → impassable high ground, then fill pits
+    valid = dem > -9000
+    work = dem.copy().astype(np.float64)
+    if valid.any():
+        work[~valid] = float(work[valid].max()) + 1.0
+    work = _fill_depressions(work)
+
     flow_dir = np.full((rows, cols), -1, dtype=int)
     for r in range(1, rows - 1):
         for c in range(1, cols - 1):
-            min_elev = dem[r, c]
+            min_elev = work[r, c]
             best = -1
             for i, (dr, dc) in enumerate(neighbours):
                 nr, nc = r + dr, c + dc
-                if dem[nr, nc] < min_elev:
-                    min_elev = dem[nr, nc]
+                if work[nr, nc] < min_elev:
+                    min_elev = work[nr, nc]
                     best = i
             flow_dir[r, c] = best
 
-    accum = np.ones((rows, cols), dtype=float)
-    flat = [(dem[r, c], r, c) for r in range(rows) for c in range(cols)]
+    accum = np.where(valid, 1.0, 0.0)
+    flat = [(work[r, c], r, c) for r in range(rows) for c in range(cols)]
     flat.sort(reverse=True)
     for _, r, c in flat:
         d = flow_dir[r, c]
@@ -113,46 +142,105 @@ def _twi(dem, accum, row: int, col: int, cell_size_m: float = 30.0) -> float:
     return round(float(np.clip(twi_val, 0, 15)), 2)
 
 
-def _distance_to_channel(
-    dem, accum, row: int, col: int, cell_size_m: float = 30.0, min_accum: int = 500
-) -> float:
-    """Returns distance in metres to nearest channel pixel (accum > min_accum)."""
-    channel_mask = accum > min_accum
-    if not channel_mask.any():
-        return 9999.0
 
-    channel_rows, channel_cols = np.where(channel_mask)
-    distances = np.sqrt(
-        ((channel_rows - row) * cell_size_m) ** 2
-        + ((channel_cols - col) * cell_size_m) ** 2
+def _point_to_segment_m(plat: float, plon: float, alat: float, alon: float, blat: float, blon: float):
+    """
+    Distance in metres from point P to segment AB, plus coordinates of the nearest point.
+    Uses a local Euclidean projection (error < 0.1% for segments under 5 km).
+    Returns (distance_m, nearest_lat, nearest_lon).
+    """
+    cos_lat = math.cos(math.radians(plat))
+    sx = 111_000.0 * cos_lat  # m per degree lon at this latitude
+    sy = 111_000.0             # m per degree lat
+
+    px = (plon - alon) * sx
+    py = (plat - alat) * sy
+    bx = (blon - alon) * sx
+    by = (blat - alat) * sy
+
+    seg_sq = bx * bx + by * by
+    t = max(0.0, min(1.0, (px * bx + py * by) / seg_sq)) if seg_sq > 1e-10 else 0.0
+
+    dx = px - t * bx
+    dy = py - t * by
+    return math.sqrt(dx * dx + dy * dy), alat + t * (blat - alat), alon + t * (blon - alon)
+
+
+def _nearest_waterway_osm(lat: float, lon: float, radius_m: float = 5000):
+    """
+    Query OSM Overpass for the nearest point on any river/stream/canal segment.
+    Returns (distance_m, nearest_lat, nearest_lon).
+    Falls back to (9999.0, lat, lon) on network failure or no result.
+
+    COP30 is a DSM that cannot reliably detect channels in urban / flat terrain.
+    OSM waterway data is authoritative and requires no API key.
+    """
+    query = (
+        f"[out:json][timeout:15];"
+        f"("
+        f'way["waterway"="river"](around:{radius_m},{lat},{lon});'
+        f'way["waterway"="stream"](around:{radius_m},{lat},{lon});'
+        f'way["waterway"="canal"](around:{radius_m},{lat},{lon});'
+        f");"
+        f"(._;>;);"
+        f"out body;"
     )
-    return float(distances.min())
+    try:
+        resp = requests.post(
+            "https://overpass-api.de/api/interpreter",
+            data={"data": query},
+            headers={"User-Agent": "HydroRisk/1.0 (flood-risk scoring)"},
+            timeout=20,
+        )
+        resp.raise_for_status()
+        elements = resp.json().get("elements", [])
+        nodes = {
+            e["id"]: (e["lat"], e["lon"])
+            for e in elements
+            if e["type"] == "node" and "lat" in e
+        }
+        ways = [e for e in elements if e["type"] == "way"]
+        if not nodes or not ways:
+            print(f"[WARN] OSM: no waterway data near ({lat:.4f}, {lon:.4f})")
+            return 9999.0, lat, lon
+        best_dist, best_lat, best_lon = 9999.0, lat, lon
+        for way in ways:
+            node_ids = way.get("nodes", [])
+            for i in range(len(node_ids) - 1):
+                a = nodes.get(node_ids[i])
+                b = nodes.get(node_ids[i + 1])
+                if a is None or b is None:
+                    continue
+                d, nlat, nlon = _point_to_segment_m(lat, lon, a[0], a[1], b[0], b[1])
+                if d < best_dist:
+                    best_dist, best_lat, best_lon = d, nlat, nlon
+        return round(best_dist, 1), best_lat, best_lon
+    except Exception as e:
+        print(f"[WARN] OSM waterway query failed for ({lat:.4f}, {lon:.4f}): {e}")
+        return 9999.0, lat, lon
 
 
 def _is_floodplain(
-    dem, accum, row: int, col: int, cell_size_m: float = 30.0, min_accum: int = 500
+    dem, transform, dist_m: float, waterway_lat: float, waterway_lon: float,
+    prop_row: int, prop_col: int,
 ) -> bool:
-    """True if property is within 1km of a channel AND within 10m elevation of it.
+    """True if property is within 1km of a waterway AND within 10m elevation of it.
 
     10m threshold (not 3m) captures raised floodplain terraces typical of
     Romanian rivers, where a property sits 5–15m above the active channel but
     is still inundated when the river overtops its banks.
     """
-    channel_mask = accum > min_accum
-    if not channel_mask.any():
+    if dist_m >= 1000:
         return False
-
-    channel_rows, channel_cols = np.where(channel_mask)
-    distances = np.sqrt(
-        ((channel_rows - row) * cell_size_m) ** 2
-        + ((channel_cols - col) * cell_size_m) ** 2
-    )
-    nearest_idx = distances.argmin()
-    nearest_dist_m = distances[nearest_idx]
-    nearest_elev = dem[channel_rows[nearest_idx], channel_cols[nearest_idx]]
-    prop_elev = dem[row, col]
-
-    return bool(nearest_dist_m < 1000 and (prop_elev - nearest_elev) < 10.0)
+    try:
+        w_row, w_col = _property_cell(dem, transform, waterway_lat, waterway_lon)
+        waterway_elev = dem[w_row, w_col]
+        if waterway_elev <= -9000:
+            return dist_m < 500
+        prop_elev = dem[prop_row, prop_col]
+        return bool((prop_elev - waterway_elev) < 10.0)
+    except Exception:
+        return dist_m < 500
 
 
 def _terrain_flood_score(
@@ -208,8 +296,8 @@ def get_terrain_data(lat: float, lon: float) -> dict:
     slope = _slope_degrees(dem, row, col)
     accum = _flow_accumulation(dem)
     twi_val = _twi(dem, accum, row, col)
-    dist = _distance_to_channel(dem, accum, row, col)
-    in_fp = _is_floodplain(dem, accum, row, col)
+    dist, w_lat, w_lon = _nearest_waterway_osm(lat, lon)
+    in_fp = _is_floodplain(dem, transform, dist, w_lat, w_lon, row, col)
     score = _terrain_flood_score(elev_pct, twi_val, dist, in_fp)
 
     return {
