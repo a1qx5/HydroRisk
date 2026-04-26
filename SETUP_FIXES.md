@@ -10,9 +10,10 @@ All fixes have been committed and pushed to `master`.
 The `.env` file must exist at `c:\HydroRisk\.env` with these values:
 
 ```env
-SENTINEL_HUB_CLIENT_ID="sh-e82a5674-7ea6-46e3-aa38-26d16fa22108"
-SENTINEL_HUB_CLIENT_SECRET="VLRXH1Hoq9SOdPh6mHPvg95C8jHhQVcT"
-OPENTOPOGRAPHY_API_KEY="67d58505662fa39096b7015ae7a5d66c"
+SENTINEL_HUB_CLIENT_ID="sh-cbc3ce3d-9b10-458b-aa64-713a32d49fdd"
+SENTINEL_HUB_CLIENT_SECRET="5p526vC4UDjPIlKVHthqGZIT424fWcZS"
+OPENTOPOGRAPHY_API_KEY="c55eaa319dd71b4fa947b3b498867a4a"
+
 ```
 
 > ⚠️ This file is git-ignored. Anyone cloning the repo must create it manually.

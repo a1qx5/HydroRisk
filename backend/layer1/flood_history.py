@@ -55,8 +55,8 @@ function evaluatePixel(samples) {
 # Permanent water (river/lake) stays dark in nearly every pass → fraction ≈ 0.90–1.0.
 # Temporary flood shows dark for a few passes → fraction ≈ 0.03–0.50.
 # Always-dry land never reaches threshold → fraction = 0.0.
-_FLOOD_FRAC_LO = 0.07   # ~4 dark passes ≈ 3+ weeks water — filters brief snowmelt/wet soil
-_FLOOD_FRAC_HI = 0.80   # below this = temporary water, not permanent river/lake
+_FLOOD_FRAC_LO = 0.15   # Require ~9+ dark passes out of 60/yr — stronger filter for wet soil/crop/snow
+_FLOOD_FRAC_HI = 0.80   # Below this = temporary water, not permanent river/lake
 
 def _bounding_box(lat: float, lon: float, margin_km: float = 2.0) -> dict:
     lat_margin = margin_km / 111.0
@@ -115,8 +115,8 @@ def _detect_flood(image_array):
     cy, cx = h // 2, w // 2
     margin_y, margin_x = max(1, h // 10), max(1, w // 10)
     centre = flood_mask[cy - margin_y: cy + margin_y, cx - margin_x: cx + margin_x]
-    direct_hit = bool(centre.mean() > 0.05)   # >5% of centre area = property flooded
-    near_miss = bool(flood_mask.mean() > 0.12) # >12% of 4km box = flood reached vicinity
+    direct_hit = bool(centre.mean() > 0.10)   # >10% of centre area = property flooded
+    near_miss = bool(flood_mask.mean() > 0.35)  # >35% of 4km box = significant regional flood
 
     return direct_hit, near_miss
 
@@ -158,23 +158,30 @@ def get_flood_history(lat: float, lon: float) -> dict:
         try:
             image = _fetch_s1_image(bbox_coords, start, end, config)
             hit, near_miss = _detect_flood(image)
-            return year, hit, near_miss
+            return year, hit, near_miss, (image is not None)
         except Exception as e:
-            print(f"[WARN] Sentinel-1 query failed {start}–{end}: {e}")
-            return year, False, False
-
+            print(f"[SENTINEL-1 ERROR] Year {year}: {str(e)}")
+            return year, False, False, False
+    # Convert to list immediately — executor.map() returns a lazy generator that gets
+    # exhausted on first iteration; re-using `results` for weighted events would see nothing.
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        results = executor.map(check_year, years)
+        results = list(executor.map(check_year, years))
 
-    for year, hit, near_miss in results:
-        if hit or near_miss:
+    for year, hit, near_miss, has_data in results:
+        is_flood = hit or near_miss
+        print(f"[SENTINEL-1 DATA] Year {year} | Flood: {'YES' if is_flood else 'No'} | Has Satellite Data: {'YES' if has_data else 'No'}")
+        if is_flood:
             flood_events += 1
             years_flooded.add(year)
         if hit:
             direct_hits += 1
 
     total_years = len(years)
-    probability = len(years_flooded) / total_years
+    # Weighted probability: Direct hits (full weight 1.0) vs near-misses (0.2 — less certain signal)
+    # Lower near-miss weight prevents wet-soil/vegetation SAR signatures from inflating probability
+    direct_hit_years = set(y for y, h, n, d in results if h)
+    weighted_events = direct_hits + (len(years_flooded - direct_hit_years) * 0.2)
+    probability = weighted_events / total_years
 
     if direct_hits > 2:
         confidence = "HIGH"

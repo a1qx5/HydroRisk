@@ -20,6 +20,7 @@ let currentAnalysisData = null;
 let mitigationDrawLayer = null;
 let mitigationDrawControl = null;
 let mitigationActive    = false;
+let svMarkers           = []; // AR overlays for Street View
 
 // ── Tile layers ───────────────────────────────────────────────────
 const TILE_LAYERS = {
@@ -230,6 +231,17 @@ async function runAnalysis() {
     if (!res.ok) throw new Error('API_REJECTED');
     const data = await res.json();
     currentAnalysisData = data;
+
+    // Detailed debug logging for the user
+    console.log("%c[HYDRORISK TELEMETRY] Analysis successful", "color: #00d196; font-weight: bold;");
+    if (data.raw_property_data) {
+      console.log("Flood History Data:", {
+        events_12yr: data.raw_property_data.flood_events_12yr,
+        years_flooded: data.raw_property_data.years_with_flooding,
+        obs_probability: data.raw_property_data.annual_flood_probability_observed,
+        confidence: data.raw_property_data.flood_history_confidence
+      });
+    }
     
     setTimeout(() => {
       loader.classList.add('hidden');
@@ -239,7 +251,12 @@ async function runAnalysis() {
     clearInterval(loadingInterval);
     progressBar.style.width = '100%';
     stageText.textContent = 'MOCK ANALYSIS READY';
-    console.warn("API Analysis failed, falling back to tactical mock data:", err);
+    
+    console.error("%c[HYDRORISK ERROR] API Call Failed", "color: #ff3131; font-weight: bold;", err);
+    if (err.name === 'TimeoutError' || err.message.includes('timeout')) {
+      console.warn("The backend query timed out (likely Sentinel-1 taking >30s). Falling back to local risk models.");
+    }
+
     currentAnalysisData = generateMockAnalysis(body.lat, body.lon, body.property_value, body.current_premium);
     setTimeout(() => {
       loader.classList.add('hidden');
@@ -333,12 +350,14 @@ window.openDashboard = function(section) {
   badge.textContent = d.risk_rating.toUpperCase();
   badge.className = `risk-badge ${ratingKey}`;
 
-  // Verdict
+  // Verdict Card
   const v = d.pricing_gap;
   if (v) {
     document.getElementById('dash-v-word').textContent = v.verdict;
-    document.getElementById('dash-v-num').textContent = `€${fmt(v.gap_euros)}`;
-    document.getElementById('dash-v-sub').textContent = `Gap: ${v.gap_pct.toFixed(1)}%`;
+    // Show RECOMMENDED PREMIUM as the primary verdict number (avoiding 'gap shock')
+    document.getElementById('dash-v-num').textContent = `€${fmt(v.recommended_premium)}`;
+    document.getElementById('dash-v-sub').textContent = `${v.verdict}: €${fmt(Math.abs(v.gap_euros))} (${v.gap_pct.toFixed(1)}%)`;
+    
     const vKey = v.verdict.toLowerCase().replace(' ', '-');
     document.getElementById('dash-verdict').className = `verdict-card ${vKey.startsWith('under') ? 'vc-underpriced-severe' : vKey.includes('over') ? 'vc-overpriced' : 'vc-correct'}`;
   }
@@ -350,7 +369,7 @@ window.openDashboard = function(section) {
   const drivers = [
     { name: `TERRAIN ELEVATION (${raw.elevation_m}m)`, val: raw.elevation_percentile < 15 ? 'CRITICAL' : 'SAFE', pct: raw.elevation_percentile < 15 ? 90 : 20 },
     { name: `DISTANCE TO RIVER (${Math.round(raw.distance_to_river_m)}m)`, val: raw.distance_to_river_m < 200 ? 'HIGH RISK' : 'LOW RISK', pct: raw.distance_to_river_m < 200 ? 85 : 15 },
-    { name: 'FLOOD HISTORY', val: raw.flood_events_12yr > 1 ? 'SEVERE' : 'NONE', pct: raw.flood_events_12yr > 1 ? 95 : 5 },
+    { name: 'FLOOD HISTORY', val: raw.flood_events_12yr === 0 ? 'NONE' : raw.flood_events_12yr <= 2 ? 'MODERATE' : raw.flood_events_12yr <= 4 ? 'HIGH' : 'SEVERE', pct: Math.min(100, raw.flood_events_12yr * 10) },
     { name: 'SOIL IMPERVIOUSNESS', val: raw.imperviousness_pct > 0.6 ? 'EXTREME' : 'LOW', pct: raw.imperviousness_pct > 0.6 ? 75 : 30 },
     { name: 'CLIMATE MULTIPLIER', val: raw.climate_multiplier_2035 > 1.2 ? 'SEVERE' : 'STABLE', pct: raw.climate_multiplier_2035 > 1.2 ? 80 : 35 },
     { name: 'FLOOD DEFENSES', val: raw.flood_defense_present ? 'ACTIVE' : 'VULNERABLE', pct: raw.flood_defense_present ? 15 : 85 }
@@ -499,9 +518,21 @@ window.openStreetView = function() {
         );
       } else {
         svPanorama.setPano(data.location.pano);
-        svPanorama.setPov({ heading: 0, pitch: 0 });
+        // Point camera at the property or the first mitigation point
+        let targetPos = position;
+        if (mitigationDrawLayer && mitigationDrawLayer.getLayers().length > 0) {
+          const firstLayer = mitigationDrawLayer.getLayers()[0];
+          const latlngs = firstLayer instanceof L.Polygon ? firstLayer.getLatLngs()[0] : firstLayer.getLatLngs();
+          if (latlngs.length > 0) targetPos = { lat: latlngs[0].lat, lng: latlngs[0].lng };
+        }
+        const heading = google.maps.geometry.spherical.computeHeading(
+          data.location.latLng, 
+          new google.maps.LatLng(targetPos.lat, targetPos.lng)
+        );
+        svPanorama.setPov({ heading, pitch: -10, zoom: 1 });
       }
       svPanorama.setVisible(true);
+      syncMitigationToStreetView();
     } else {
       // No imagery — try with wider radius
       sv.getPanorama({ location: position, radius: 500, preference: google.maps.StreetViewPreference.NEAREST }, (data2, status2) => {
@@ -773,7 +804,127 @@ window.clearMitigationDrawings = function() {
   document.getElementById('mit-result-content').classList.add('hidden');
   document.getElementById('mit-result-loading').style.display = 'block';
   document.getElementById('mit-result-loading').textContent = 'Draw a barrier or basin on the map to simulate mitigation effects.';
+  syncMitigationToStreetView();
 };
+
+function syncMitigationToStreetView() {
+  if (!svPanorama) return;
+  
+  // Clear old markers/overlays
+  svMarkers.forEach(m => m.setMap(null));
+  svMarkers = [];
+
+  if (!mitigationDrawLayer) return;
+
+  const nodeIcon = {
+    path: "M -2,0 L 0,-4 L 2,0 L 0,1 Z", // Diamond/Pylon shape
+    fillColor: "#00d196",
+    fillOpacity: 0.9,
+    strokeColor: "#ffffff",
+    strokeWeight: 2,
+    scale: 12,
+    labelOrigin: new google.maps.Point(0, -5)
+  };
+
+  const lineDotIcon = {
+    path: google.maps.SymbolPath.CIRCLE,
+    fillColor: "#00d196",
+    fillOpacity: 0.6,
+    strokeWeight: 0,
+    scale: 4
+  };
+
+  mitigationDrawLayer.eachLayer(layer => {
+    let latlngs = [];
+    let type = '';
+    let isClosed = false;
+
+    if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+      latlngs = layer.getLatLngs();
+      type = 'BARRIER';
+    } else if (layer instanceof L.Polygon) {
+      latlngs = layer.getLatLngs()[0];
+      type = 'BASIN';
+      isClosed = true;
+    }
+
+    if (latlngs.length === 0) return;
+
+    // Convert to Google LatLngs
+    const gPoints = latlngs.map(ll => new google.maps.LatLng(ll.lat, ll.lng));
+
+    // Draw "Lines" via interpolation (Polylines don't render in Street View)
+    const drawSegments = isClosed ? [...gPoints, gPoints[0]] : gPoints;
+    
+    for (let i = 0; i < drawSegments.length - 1; i++) {
+      const p1 = drawSegments[i];
+      const p2 = drawSegments[i+1];
+      const dist = google.maps.geometry.spherical.computeDistanceBetween(p1, p2);
+      
+      // Place a dot every 1.5 meters
+      const step = 1.5; 
+      const numDots = Math.floor(dist / step);
+      
+      for (let j = 1; j < numDots; j++) {
+        const fraction = j / numDots;
+        const pos = google.maps.geometry.spherical.interpolate(p1, p2, fraction);
+        const dot = new google.maps.Marker({
+          position: pos,
+          map: svPanorama,
+          icon: lineDotIcon,
+          clickable: false
+        });
+        svMarkers.push(dot);
+      }
+    }
+
+    // Add main node markers
+    gPoints.forEach((pos, idx) => {
+      const marker = new google.maps.Marker({
+        position: pos,
+        map: svPanorama,
+        icon: nodeIcon,
+        label: {
+          text: `${type} PT ${idx+1}`,
+          color: "#00d196",
+          fontSize: "10px",
+          fontWeight: "bold",
+          fontFamily: "monospace"
+        },
+        title: `${type} Node`
+      });
+      svMarkers.push(marker);
+    });
+  });
+
+  // Also add a marker for the selected target location (the property)
+  if (selectedLat && selectedLon) {
+    const targetMarker = new google.maps.Marker({
+      position: { lat: selectedLat, lng: selectedLon },
+      map: svPanorama,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        fillColor: "#00d1ff",
+        fillOpacity: 0.8,
+        strokeColor: "#ffffff",
+        strokeWeight: 2,
+        scale: 8
+      },
+      label: {
+        text: "TARGET PROPERTY",
+        color: "#00d1ff",
+        fontSize: "10px",
+        fontWeight: "bold",
+        fontFamily: "monospace"
+      },
+      title: "Target Property"
+    });
+    svMarkers.push(targetMarker);
+  }
+}
+
+
+
 
 function _deactivateDrawControl() {
   if (mitigationDrawControl) {
@@ -820,6 +971,7 @@ async function _runMitigationSimulation() {
     if (d.error) throw new Error(d.error);
 
     _renderMitigationResult(d);
+    syncMitigationToStreetView();
   } catch (err) {
     loadEl.textContent = `Simulation error: ${err.message}`;
   }
@@ -882,7 +1034,7 @@ window.generateDossier = function() {
   const drivers = [
     { name: 'TERRAIN ELEVATION', val: `${raw.elevation_m}m`, status: raw.elevation_percentile < 15 ? 'CRITICAL' : 'STABLE' },
     { name: 'RIVER PROXIMITY', val: `${Math.round(raw.distance_to_river_m)}m`, status: raw.distance_to_river_m < 200 ? 'HIGH RISK' : 'SAFE' },
-    { name: 'FLOOD HISTORY', val: `${raw.flood_events_12yr} events`, status: raw.flood_events_12yr > 1 ? 'SEVERE' : 'NONE' },
+    { name: 'FLOOD HISTORY', val: `${raw.flood_events_12yr} events`, status: raw.flood_events_12yr === 0 ? 'NONE' : raw.flood_events_12yr <= 2 ? 'MODERATE' : raw.flood_events_12yr <= 4 ? 'HIGH' : 'SEVERE' },
     { name: 'SOIL DRAINAGE', val: `${Math.round(raw.imperviousness_pct*100)}% Imperv.`, status: raw.imperviousness_pct > 0.6 ? 'POOR' : 'GOOD' }
   ];
 

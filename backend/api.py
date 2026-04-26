@@ -123,12 +123,12 @@ def analyze():
     property_value, current_premium, loss_ratio, err = _parse_floats(body, "property_value", "current_premium", "loss_ratio")
     if err:
         return err
-
     try:
         property_data    = get_property_data(lat, lon)
         probability_data = calculate_probability(property_data)
         result           = calculate_premium(probability_data, property_value, current_premium, loss_ratio)
         result["raw_property_data"] = property_data
+        print(f"[API] Analysis complete for {lat}, {lon}. Flood Probability: {probability_data.get('annual_flood_probability')}")
         return jsonify(result)
     except Exception as exc:
         import traceback

@@ -86,15 +86,19 @@ def _defense_score(d: dict) -> float:
 
 
 def _estimate_flood_depth(d: dict) -> float:
+    """Estimates likely inundation depth based on elevation and runoff potential."""
     elev = d["elevation_m"]
     imperv = d["upstream_imperviousness_pct"]
-    if elev < 50 and imperv > 0.7:
+    
+    # Require both high runoff and low elevation for extreme depths
+    if elev < 50 and imperv > 0.6:
         return 1.5
-    if elev < 80 or imperv > 0.5:
+    if elev < 70 and imperv > 0.4:
         return 0.9
-    if elev < 150 or imperv > 0.3:
+    if elev < 120 and imperv > 0.2:
         return 0.4
     return 0.15
+
 
 
 def calculate_probability(property_data: dict) -> dict:
