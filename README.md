@@ -1,83 +1,88 @@
 HydroRisk - Flood Risk Intelligence
 
-HydroRisk is a satellite-driven flood risk assessment platform developed for the Cassini Hackathon. It utilizes European space data (Sentinel-1, Copernicus DEM, and C3S) to provide insurers and property owners with precise, real-time flood probability and financial risk analysis.
+HydroRisk is a high-fidelity flood risk assessment platform developed for the Cassini Hackathon. The system integrates European space data, including Sentinel-1 SAR imagery, Copernicus Digital Elevation Models (DEM), and Copernicus Climate Change Service (C3S) projections, to provide insurers and property owners with dynamic flood probability and financial risk analysis.
 
-The platform addresses the gap in flood insurance by replacing static, outdated maps with a dynamic "5-Lens" analysis model. It allows users to assess individual properties or entire portfolios to identify mispriced risks and simulate the impact of flood mitigation infrastructure.
+By shifting from static, historical flood maps to a dynamic "5-Lens" predictive model, the platform identifies mispriced risks and allows for the simulation of flood mitigation infrastructure impacts.
 Key Features
 
-    Property Risk Assessment: Analyze any property by address or coordinates using high-resolution satellite telemetry.
+    Property Risk Assessment: Evaluate specific locations via address or coordinate input using high-resolution satellite telemetry.
 
-    The 5-Lens Risk Engine:
+    Interactive Mitigation Designer: A geospatial tool allowing users to "draw" flood barriers or retention basins directly on the map to visualize real-time risk reduction and premium adjustments.
 
-        Flood History: 12-year archive analysis using Sentinel-1 SAR imagery.
+    Portfolio Management: Financial modeling tools for insurance providers to assess risk across large property books and calculate the ROI of mitigation efforts.
 
-        Terrain Analysis: 30m resolution elevation and slope data from Copernicus DEM.
+    Accumulation Analysis: Automated detection of geographic risk clusters where high-exposure policies are concentrated within shared hydrological catchments.
 
-        Land Use: Real-time soil imperviousness data from the EEA High Resolution Layer.
+    Dossier Generation: Export automated PDF risk reports containing detailed scoring and environmental data for underwriting and valuation.
 
-        Climate Projections: Regional precipitation trends projected to 2035 using C3S models.
+The 5-Lens Risk Engine
 
-        Defenses: Mapping of existing flood barriers and embankments via OpenStreetMap.
+The HydroRisk core engine synthesizes five distinct data layers to generate a comprehensive risk score:
 
-    Mitigation Designer: An interactive tool to draw flood barriers or retention basins on a map to visualize immediate reductions in risk and insurance premiums.
+    Flood History: Analysis of 12 years of archival Sentinel-1 SAR imagery to detect historical inundation patterns.
 
-    Portfolio Simulator: A financial modeling tool for insurers to calculate the ROI of adopting HydroRisk across their book of business.
+    Terrain Analysis: Slope and elevation modeling derived from 30m resolution Copernicus DEM (GLO-30) data.
 
-    Accumulation Scan: Identifies geographic clusters where high-risk policies are concentrated.
+    Land Use: Soil imperviousness and surface permeability data sourced from the EEA High Resolution Layer.
 
-    Intelligence Dossier: Export comprehensive PDF risk reports for internal underwriting or property valuation.
+    Climate Projections: Predictive precipitation and climate trend modeling extending to 2035 using C3S datasets.
 
-Technology Stack
-Backend
+    Defense Infrastructure: Real-time mapping of existing barriers, embankments, and flood-control structures via OpenStreetMap.
 
-    Language: Python 3.x
+Technical Architecture
+Backend Stack
 
-    Framework: Flask
+    Environment: Python 3.x
 
-    Geospatial Libraries: Rasterio, NumPy, SciPy, SentinelHub API
+    API Framework: Flask
 
-    Data Sources: Sentinel-1 SAR, Copernicus DEM 30m (GLO-30), EEA High Resolution Imperviousness Density
+    Geospatial Processing: Rasterio, NumPy, SciPy, SentinelHub API
 
-Frontend
+    Data Pipelines: Automated retrieval from Copernicus Data Space Ecosystem and OpenTopography
 
-    Core: HTML5, CSS3, JavaScript
+Frontend Stack
 
-    Mapping: Leaflet.js, Leaflet.draw
+    Interface: HTML5 / CSS3 with a Glassmorphism UI design
 
-    Reporting: html2pdf
+    Mapping Engine: Leaflet.js and Leaflet.draw for geospatial interactions
 
-Getting Started
-1. Environment Setup
+    Export Engine: html2pdf for automated reporting
 
-Create a .env file in the root directory and add your API credentials:
-Fragment de cod
+Installation and Setup
+1. Environment Configuration
+
+Create a .env file in the project root directory. You will need to provide credentials for the following services:
+Plaintext
 
 SENTINEL_HUB_CLIENT_ID="your_client_id"
 SENTINEL_HUB_CLIENT_SECRET="your_client_secret"
 OPENTOPOGRAPHY_API_KEY="your_api_key"
 
-2. Install Dependencies
+2. Dependency Management
 
-Run the provided installer script to manage environment-specific dependencies:
+To ensure all geospatial libraries and file-system requirements are handled correctly, run the custom installer:
 Bash
 
 python install_deps.py
 
-3. Running the Application
+3. Application Execution
 
-Start the Backend API:
+Launch the Backend Service:
 Bash
 
 cd backend
 python api.py
 
-Start the Frontend:
+Launch the Frontend Client:
 Bash
 
 cd frontend
 python -m http.server 8000
 
-The application will be accessible at http://localhost:8000.
+The application will be accessible via your browser at http://localhost:8000.
 Methodology and Validation
 
-The HydroRisk weighted model is validated against historical flood insurance claims data. The platform’s premium recommendations utilize the JRC European Flood Depth-Damage Curves, ensuring actuarial alignment with EU benchmarks. The core risk engine weights factors based on empirical analysis, where satellite flood history and terrain are identified as the primary predictors of severe loss.
+The HydroRisk weighted model is built upon the JRC European Flood Depth-Damage Curves, ensuring premium calculations align with established EU actuarial standards. The model has been validated against historical loss data, identifying satellite-verified flood history and terrain slope as the two most significant predictors of high-severity insurance claims.
+License
+
+Developed for the Cassini Hackathon. All rights reserved.
